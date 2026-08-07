@@ -108,6 +108,19 @@ fileInput.addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+// 粘贴上传：截图（Ctrl+V / 右键粘贴）直接加入列表
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  const imgs = [...items]
+    .filter((it) => it.type && it.type.startsWith('image/'))
+    .map((it) => it.getAsFile())
+    .filter(Boolean);
+  if (!imgs.length) return;
+  e.preventDefault();
+  handleFiles(imgs);
+});
+
 function handleFiles(files) {
   const imgs = files.filter((f) => f.type.startsWith('image/'));
   if (!imgs.length) { toast('请选择图片文件', true); return; }
