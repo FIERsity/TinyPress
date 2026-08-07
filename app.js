@@ -227,6 +227,9 @@ function renderResult(card, file, r) {
     const inRange = r.blob.size >= state.targetBytes * (1 - RANGE_RATIO);
     stateEl.textContent = inRange ? '压缩完成' : (underTarget ? '已达标' : '尽力压缩');
     stateEl.className = 'state ' + (underTarget ? 'ok' : 'err');
+    if (state.format === 'avif' && r.ext !== 'avif') {
+      stateEl.textContent += '（浏览器不支持 AVIF，已用 ' + r.ext.toUpperCase() + '）';
+    }
     sizeOut.textContent = fmtBytes(r.blob.size);
     savedEl.textContent = savedRatio > 0 ? '−' + fmtPct(savedRatio) : '+0%';
     if (r.resized) {
@@ -333,7 +336,10 @@ async function compressFile(file, targetBytes, formatMode) {
   if (formatMode === 'jpeg') { effType = 'image/jpeg'; ext = 'jpg'; }
   else if (formatMode === 'webp') { effType = 'image/webp'; ext = 'webp'; }
   else if (formatMode === 'png') { effType = 'image/png'; ext = 'png'; }
-  else if (formatMode === 'avif' && supportsAvif) { effType = 'image/avif'; ext = 'avif'; }
+  else if (formatMode === 'avif') {
+    if (supportsAvif) { effType = 'image/avif'; ext = 'avif'; }
+    else { effType = 'image/webp'; ext = 'webp'; } // 不支持 AVIF → 明确回退 WebP
+  }
   else {
     const hasAlpha = detectAlpha(bitmap);
     const src = (file.type || '').toLowerCase();
