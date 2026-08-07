@@ -191,6 +191,13 @@ const formatNote = document.getElementById('formatNote');
 
 const customWrap = document.getElementById('customWrap');
 
+function selectCustom(hasValue = true) {
+  // 切到自定义：清除所有预设选中，点亮自定义胶囊
+  [...presetBtns.children].forEach((b) => b.classList.remove('active'));
+  customWrap.classList.toggle('active', hasValue);
+  if (!hasValue && customSize.value !== '') customSize.value = '';
+}
+
 function setTarget(kb) {
   kb = Math.round(Number(kb));
   state.convertOnly = kb === -1;
@@ -207,7 +214,7 @@ function setTarget(kb) {
       b.classList.toggle('active', Number(b.dataset.kb) === kb));
     // 预设命中 → 取消自定义选中；自定义值 → 高亮胶囊
     const isPreset = [...presetBtns.children].some((b) => Number(b.dataset.kb) === kb);
-    customWrap.classList.toggle('active', !isPreset && customSize.value !== '');
+    customWrap.classList.toggle('active', !isPreset);
     if (!isPreset && String(customSize.value) !== String(kb)) customSize.value = kb;
   }
 }
@@ -218,17 +225,17 @@ presetBtns.addEventListener('click', (e) => {
   setTarget(Number(btn.dataset.kb));
 });
 
-customWrap.addEventListener('click', () => customSize.focus());
+customWrap.addEventListener('click', () => { selectCustom(); customSize.focus(); });
 customWrap.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); customSize.focus(); }
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectCustom(); customSize.focus(); }
 });
-customSize.addEventListener('focus', () => customWrap.classList.add('active'));
+customSize.addEventListener('focus', () => { selectCustom(); });
 customSize.addEventListener('input', () => {
-  if (customSize.value !== '') customWrap.classList.add('active');
+  selectCustom(!!customSize.value);
 });
 customSize.addEventListener('change', () => {
   const v = Number(customSize.value);
-  if (!v || v < 10) { customSize.value = ''; return; }
+  if (!v || v < 10) { selectCustom(false); return; }
   setTarget(v);
 });
 
