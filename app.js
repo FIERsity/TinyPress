@@ -10,6 +10,7 @@
 const state = {
   targetBytes: 1024 * 1024, // 默认 1MB（GitHub 头像等常见门槛）
   format: 'auto',          // auto | jpeg | webp | png
+  convertOnly: false,      // true = 仅格式转换，不压体积
   files: [],               // 待压缩文件
   processing: false,
 };
@@ -39,6 +40,147 @@ function toast(msg, isErr = false) {
   toast._t = setTimeout(() => el.classList.remove('show'), 2600);
 }
 
+/* ---------------- 国际化 ---------------- */
+const I18N = {
+  zh: {
+    pageTitle: '图压 TinyPress · 图片压缩到指定大小',
+    tagline: '简单快捷的图片压缩工具',
+    privacy: '纯本地处理',
+    langZh: '中', langEn: 'EN',
+    feedback: '提交反馈',
+    dropAria: '上传图片',
+    dropTitle: '点击选择图片，拖拽或粘贴上传',
+    dropHint: '支持 JPG / PNG / WebP / AVIF / GIF，可一次选择多张',
+    targetLabel: '目标大小',
+    convertOnly: '仅转换',
+    customPh: '自定义 KB',
+    formatLabel: '输出格式',
+    fmtAuto: '自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。',
+    fmtJpeg: 'JPEG：照片类最合适，透明区域会填充白色',
+    fmtWebp: 'WebP：体积小、支持透明',
+    fmtAvif: 'AVIF：当前压缩率最好的格式，浏览器不支持时自动回退',
+    fmtPng: 'PNG：无损格式，只缩小分辨率不损失画质',
+    compress: '压缩',
+    compressing: '压缩中…',
+    converting: '转换中…',
+    resultsTitle: '压缩结果',
+    convertResultsTitle: '转换结果',
+    downloadAll: '打包下载',
+    packaging: '打包中…',
+    clearAll: '清空',
+    footer: '图压 TinyPress · 免费开源工具 · 图片仅在本地浏览器中处理，绝不上传',
+    selectImages: '请选择图片文件',
+    selected: '已选 {n} 张，共 {size}',
+    fbTitle: '提交反馈',
+    fbHint: '反馈将以公开 Issue 发布到 GitHub，请勿填写敏感信息。',
+    fbPlaceholder: '遇到了什么问题？或有什么建议？',
+    fbCancel: '取消',
+    fbSubmit: '提交',
+    fbSending: '提交中…',
+    fbEmpty: '请先填写反馈内容',
+    fbOk: '已提交，感谢反馈！',
+    fbFail: '反馈提交失败',
+    zipFail: '打包库加载失败',
+    zipDone: '已打包 {n} 张图片',
+    zipFailGen: '打包失败',
+    origLabel: '原图', compLabel: '压缩后', convertCompLabel: '转换后',
+    stateCompressing: '压缩中…', stateConverting: '转换中…',
+    stateFailed: '失败', stateNoCompress: '无需压缩', stateConverted: '转换完成',
+    stateDone: '压缩完成', stateOk: '已达标', stateBest: '尽力压缩',
+    stateUnsupported: '（浏览器不支持 AVIF，已用 {ext}）',
+    origSize: '原始大小', afterSize: '压缩后', convertAfterSize: '转换后',
+    savedSpace: '节省空间', dims: '尺寸', quality: '质量',
+    original: '原图', lossless: '无损',
+    resizedWarn: '(已降分辨率)', convertedWarn: '(已转 {ext})',
+    downloadOrig: '下载原图', download: '下载 {ext}', downloading: '处理中…',
+    canNotHandle: '无法处理',
+  },
+  en: {
+    pageTitle: 'TinyPress · Compress images to a target size',
+    tagline: 'A simple, fast image compression tool',
+    privacy: '100% local',
+    langZh: '中', langEn: 'EN',
+    feedback: 'Feedback',
+    dropAria: 'Upload images',
+    dropTitle: 'Click to select, drag & drop, or paste',
+    dropHint: 'JPG / PNG / WebP / AVIF / GIF, multiple files supported',
+    targetLabel: 'Target size',
+    convertOnly: 'Convert only',
+    customPh: 'Custom KB',
+    formatLabel: 'Output format',
+    fmtAuto: 'Auto: keeps the original format; falls back to WebP → AVIF / JPEG only when needed.',
+    fmtJpeg: 'JPEG: best for photos; transparent areas become white',
+    fmtWebp: 'WebP: small size, supports transparency',
+    fmtAvif: 'AVIF: best compression ratio; falls back automatically if unsupported',
+    fmtPng: 'PNG: lossless; only resolution is reduced',
+    compress: 'Compress',
+    compressing: 'Compressing…',
+    converting: 'Converting…',
+    resultsTitle: 'Results',
+    convertResultsTitle: 'Results',
+    downloadAll: 'Download all',
+    packaging: 'Packing…',
+    clearAll: 'Clear',
+    footer: 'TinyPress · Free & open source · Images never leave your browser',
+    selectImages: 'Please choose image files',
+    selected: '{n} selected, {size} total',
+    fbTitle: 'Send feedback',
+    fbHint: 'Feedback is published as a public GitHub issue. Please don\'t include sensitive info.',
+    fbPlaceholder: 'What problem did you run into? Any suggestions?',
+    fbCancel: 'Cancel',
+    fbSubmit: 'Send',
+    fbSending: 'Sending…',
+    fbEmpty: 'Please enter feedback first',
+    fbOk: 'Sent, thanks for the feedback!',
+    fbFail: 'Failed to send feedback',
+    zipFail: 'Failed to load zip library',
+    zipDone: 'Packed {n} image(s)',
+    zipFailGen: 'Failed to pack',
+    origLabel: 'Original', compLabel: 'After', convertCompLabel: 'After',
+    stateCompressing: 'Working…', stateConverting: 'Working…',
+    stateFailed: 'Failed', stateNoCompress: 'No compression needed', stateConverted: 'Converted',
+    stateDone: 'Done', stateOk: 'Done', stateBest: 'Best effort',
+    stateUnsupported: ' (AVIF unsupported, used {ext})',
+    origSize: 'Original size', afterSize: 'After', convertAfterSize: 'After',
+    savedSpace: 'Saved', dims: 'Dimensions', quality: 'Quality',
+    original: 'Original', lossless: 'Lossless',
+    resizedWarn: ' (resized)', convertedWarn: ' (converted to {ext})',
+    downloadOrig: 'Download original', download: 'Download {ext}', downloading: 'Working…',
+    canNotHandle: 'Cannot process',
+  },
+};
+let lang = 'zh';
+const langBtns = document.querySelectorAll('.lang-btn');
+const t = (key, vars) => {
+  let s = (I18N[lang] || I18N.zh)[key] ?? key;
+  if (vars) for (const k of Object.keys(vars)) s = s.replace('{' + k + '}', vars[k]);
+  return s;
+};
+function applyLang() {
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+  document.title = t('pageTitle');
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  });
+  langBtns.forEach((b) => b.classList.toggle('active', b.dataset.lang === lang));
+  formatNote.textContent = t('fmt' + state.format.charAt(0).toUpperCase() + state.format.slice(1));
+  renderFileList();
+}
+langBtns.forEach((b) => {
+  b.addEventListener('click', () => {
+    lang = b.dataset.lang;
+    try { localStorage.setItem('tp-lang', lang); } catch (_) {}
+    applyLang();
+  });
+});
+try { lang = localStorage.getItem('tp-lang') || 'zh'; } catch (_) {}
+
 /* ---------------- 设置区 ---------------- */
 const presetBtns = document.getElementById('presetBtns');
 const customSize = document.getElementById('customSize');
@@ -46,11 +188,20 @@ const formatBtns = document.getElementById('formatBtns');
 const formatNote = document.getElementById('formatNote');
 
 function setTarget(kb) {
-  kb = Math.max(10, Math.min(102400, Math.round(Number(kb) || 100)));
-  state.targetBytes = kb * 1024;
-  [...presetBtns.children].forEach((b) =>
-    b.classList.toggle('active', Number(b.dataset.kb) === kb));
-  if (String(customSize.value) !== String(kb)) customSize.value = '';
+  kb = Math.round(Number(kb));
+  state.convertOnly = kb === -1;
+  if (state.convertOnly) {
+    state.targetBytes = 1024 * 1024;
+    [...presetBtns.children].forEach((b) =>
+      b.classList.toggle('active', b.dataset.kb === '-1'));
+    if (customSize.value !== '') customSize.value = '';
+  } else {
+    kb = Math.max(10, Math.min(102400, kb || 100));
+    state.targetBytes = kb * 1024;
+    [...presetBtns.children].forEach((b) =>
+      b.classList.toggle('active', Number(b.dataset.kb) === kb));
+    if (String(customSize.value) !== String(kb)) customSize.value = '';
+  }
 }
 
 presetBtns.addEventListener('click', (e) => {
@@ -69,14 +220,7 @@ function setFormat(fmt) {
   state.format = fmt;
   [...formatBtns.children].forEach((b) =>
     b.classList.toggle('active', b.dataset.format === fmt));
-  const notes = {
-    auto: '自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。',
-    jpeg: 'JPEG：照片类最合适，透明区域会填充白色',
-    webp: 'WebP：体积小、支持透明',
-    avif: 'AVIF：当前压缩率最好的格式，浏览器不支持时自动回退',
-    png: 'PNG：无损格式，只缩小分辨率不损失画质',
-  };
-  formatNote.textContent = notes[fmt] || '';
+  formatNote.textContent = t('fmt' + fmt.charAt(0).toUpperCase() + fmt.slice(1)) || '';
 }
 
 formatBtns.addEventListener('click', (e) => {
@@ -123,7 +267,7 @@ document.addEventListener('paste', (e) => {
 
 function handleFiles(files) {
   const imgs = files.filter((f) => f.type.startsWith('image/'));
-  if (!imgs.length) { toast('请选择图片文件', true); return; }
+  if (!imgs.length) { toast(t('selectImages'), true); return; }
   state.files = state.files.concat(imgs);
   renderFileList();
   updateCompressBtn();
@@ -142,7 +286,7 @@ function renderFileList() {
   });
   const total = state.files.reduce((s, f) => s + f.size, 0);
   selectedInfo.textContent = state.files.length
-    ? '已选 ' + state.files.length + ' 张，共 ' + fmtBytes(total)
+    ? t('selected', { n: state.files.length, size: fmtBytes(total) })
     : '';
 }
 
@@ -166,11 +310,12 @@ compressBtn.addEventListener('click', async () => {
   if (!state.files.length || state.processing) return;
   state.processing = true;
   updateCompressBtn();
-  compressBtn.textContent = '压缩中…';
+  compressBtn.textContent = t(state.convertOnly ? 'converting' : 'compressing');
 
   const files = state.files.slice();
   const target = state.targetBytes;
   const format = state.format;
+  const convertOnly = state.convertOnly;
   state.files = [];
   renderFileList();
 
@@ -178,7 +323,7 @@ compressBtn.addEventListener('click', async () => {
   for (const file of files) {
     const card = createCard(file);
     try {
-      const r = await compressFile(file, target, format);
+      const r = await compressFile(file, target, format, convertOnly);
       renderResult(card, file, r);
     } catch (err) {
       console.error('压缩失败:', file.name, err);
@@ -188,7 +333,7 @@ compressBtn.addEventListener('click', async () => {
 
   state.processing = false;
   updateCompressBtn();
-  compressBtn.textContent = '压缩';
+  compressBtn.textContent = t('compress');
   updateDownloadAllBtn();
 });
 
@@ -200,21 +345,21 @@ function createCard(file) {
   card.className = 'result-card';
   card.innerHTML =
     '<div class="compare">' +
-      '<span class="cmp-label orig">原图</span>' +
-      '<span class="cmp-label comp">压缩后</span>' +
-      '<img class="cmp-before" alt="原图" />' +
-      '<img class="cmp-after" alt="压缩后" />' +
+      '<span class="cmp-label orig">' + t('origLabel') + '</span>' +
+      '<span class="cmp-label comp">' + t('compLabel') + '</span>' +
+      '<img class="cmp-before" alt="original" />' +
+      '<img class="cmp-after" alt="after" />' +
       '<div class="cmp-handle"></div>' +
-      '<input type="range" class="cmp-range" min="0" max="100" value="50" aria-label="对比滑杆" />' +
+      '<input type="range" class="cmp-range" min="0" max="100" value="50" aria-label="compare slider" />' +
     '</div>' +
     '<div class="result-body">' +
-      '<div class="result-name"><span class="name">' + escapeHtml(file.name) + '</span><span class="state">压缩中…</span></div>' +
-      '<div class="stat-row"><span>原始大小</span><b>' + fmtBytes(file.size) + '</b></div>' +
-      '<div class="stat-row"><span>压缩后</span><b class="size-out">…</b></div>' +
-      '<div class="stat-row"><span>节省空间</span><span class="saved">…</span></div>' +
-      '<div class="stat-row"><span>尺寸</span><b class="dims">…</b></div>' +
-      '<div class="stat-row"><span>质量</span><b class="quality">…</b></div>' +
-      '<button class="btn-download" disabled>处理中…</button>' +
+      '<div class="result-name"><span class="name">' + escapeHtml(file.name) + '</span><span class="state">' + t(state.convertOnly ? 'stateConverting' : 'stateCompressing') + '</span></div>' +
+      '<div class="stat-row"><span>' + t('origSize') + '</span><b>' + fmtBytes(file.size) + '</b></div>' +
+      '<div class="stat-row"><span>' + t(state.convertOnly ? 'convertAfterSize' : 'afterSize') + '</span><b class="size-out">…</b></div>' +
+      '<div class="stat-row"><span>' + t('savedSpace') + '</span><span class="saved">…</span></div>' +
+      '<div class="stat-row"><span>' + t('dims') + '</span><b class="dims">…</b></div>' +
+      '<div class="stat-row"><span>' + t('quality') + '</span><b class="quality">…</b></div>' +
+      '<button class="btn-download" disabled>' + t('downloading') + '</button>' +
     '</div>';
   resultGrid.appendChild(card);
 
@@ -238,31 +383,41 @@ function renderResult(card, file, r) {
   const qualityEl = card.querySelector('.quality');
   const btn = card.querySelector('.btn-download');
 
-  dimsEl.textContent = r.width + ' × ' + r.height;
-  qualityEl.textContent = r.kept ? '原图' : r.quality === 1 ? '无损' : Math.round(r.quality * 100) + '%';
-
   const base = file.name.replace(/\.[^.]+$/, '');
   const ext = (r.ext || 'jpg').toLowerCase();
+  const isConvert = state.convertOnly;
+
+  dimsEl.textContent = r.width + ' × ' + r.height;
+  qualityEl.textContent = r.kept ? t('original') : r.quality === 1 ? t('lossless') : Math.round(r.quality * 100) + '%';
 
   if (r.kept) {
-    stateEl.textContent = '无需压缩';
+    stateEl.textContent = isConvert ? t('stateConverted') : t('stateNoCompress');
     stateEl.className = 'state ok';
     sizeOut.textContent = fmtBytes(r.blob.size);
-    savedEl.textContent = '已达标';
-    btn.textContent = '下载原图';
+    savedEl.textContent = '—';
+    btn.textContent = t('downloadOrig');
+  } else if (isConvert) {
+    stateEl.textContent = t('stateConverted');
+    stateEl.className = 'state ok';
+    sizeOut.textContent = fmtBytes(r.blob.size);
+    savedEl.textContent = '—';
+    if (r.resized) {
+      dimsEl.innerHTML = r.width + ' × ' + r.height + ' <span class="warn">' + t('resizedWarn') + '</span>';
+    }
+    btn.textContent = t('download', { ext: ext.toUpperCase() });
   } else {
     const savedRatio = 1 - r.blob.size / file.size;
     const underTarget = r.blob.size <= state.targetBytes;
     const inRange = r.blob.size >= state.targetBytes * (1 - RANGE_RATIO);
-    stateEl.textContent = inRange ? '压缩完成' : (underTarget ? '已达标' : '尽力压缩');
+    stateEl.textContent = inRange ? t('stateDone') : (underTarget ? t('stateOk') : t('stateBest'));
     stateEl.className = 'state ' + (underTarget ? 'ok' : 'err');
     if (state.format === 'avif' && r.ext !== 'avif') {
-      stateEl.textContent += '（浏览器不支持 AVIF，已用 ' + r.ext.toUpperCase() + '）';
+      stateEl.textContent += t('stateUnsupported', { ext: r.ext.toUpperCase() });
     }
     sizeOut.textContent = fmtBytes(r.blob.size);
     savedEl.textContent = savedRatio > 0 ? '−' + fmtPct(savedRatio) : '+0%';
     if (r.resized) {
-      dimsEl.innerHTML = r.width + ' × ' + r.height + ' <span class="warn">(已降分辨率)</span>';
+      dimsEl.innerHTML = r.width + ' × ' + r.height + ' <span class="warn">' + t('resizedWarn') + '</span>';
     }
     const srcMime = (file.type || '').toLowerCase();
     const srcSame = (srcMime === 'image/jpeg' && r.ext === 'jpg') ||
@@ -270,9 +425,9 @@ function renderResult(card, file, r) {
       (srcMime === 'image/webp' && r.ext === 'webp') ||
       (srcMime === 'image/avif' && r.ext === 'avif');
     if (r.converted && !srcSame) {
-      dimsEl.innerHTML += ' <span class="warn">(已转 ' + r.ext.toUpperCase() + ')</span>';
+      dimsEl.innerHTML += ' <span class="warn">' + t('convertedWarn', { ext: r.ext.toUpperCase() }) + '</span>';
     }
-    btn.textContent = '下载 ' + ext.toUpperCase();
+    btn.textContent = t('download', { ext: ext.toUpperCase() });
   }
 
   btn.disabled = false;
@@ -286,12 +441,12 @@ function renderResult(card, file, r) {
 }
 
 function renderError(card, file, err) {
-  card.querySelector('.state').textContent = '失败';
+  card.querySelector('.state').textContent = t('stateFailed');
   card.querySelector('.state').className = 'state err';
   card.querySelector('.size-out').textContent = '—';
   card.querySelector('.saved').textContent = err.message || String(err);
   const btn = card.querySelector('.btn-download');
-  btn.textContent = '无法处理';
+  btn.textContent = t('canNotHandle');
   btn.disabled = true;
 }
 
@@ -309,7 +464,7 @@ function loadJSZip() {
     const script = document.createElement('script');
     script.src = 'jszip.min.js';
     script.onload = () => resolve(window.JSZip);
-    script.onerror = () => reject(new Error('打包库加载失败'));
+    script.onerror = () => reject(new Error(t('zipFail')));
     document.head.appendChild(script);
   });
   return jszipPromise;
@@ -319,7 +474,7 @@ downloadAllBtn.addEventListener('click', async () => {
   if (!doneResults.length) return;
   try {
     downloadAllBtn.disabled = true;
-    downloadAllBtn.textContent = '打包中…';
+    downloadAllBtn.textContent = t('packaging');
     const JSZip = await loadJSZip();
     const zip = new JSZip();
     for (const { file, result } of doneResults) {
@@ -333,10 +488,10 @@ downloadAllBtn.addEventListener('click', async () => {
     a.download = 'tinypress-' + doneResults.length + '张.zip';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast('已打包 ' + doneResults.length + ' 张图片');
+    toast(t('zipDone', { n: doneResults.length }));
   } catch (err) {
     console.error('打包失败:', err);
-    toast(err.message || '打包失败', true);
+    toast(err.message || t('zipFailGen'), true);
   } finally {
     downloadAllBtn.textContent = '打包下载';
     updateDownloadAllBtn();
@@ -423,7 +578,7 @@ async function searchQuality(w, h, encode, targetBytes, maxQ = 1) {
  * - 有损压缩：先原尺寸压质量；质量到底仍超目标 → 按体积比例估算下一档分辨率（收敛快、不盲目缩小）
  * 所有返回路径均携带 ext，并标记 converted（发生过格式转换）。
  */
-async function compressFile(file, targetBytes, formatMode) {
+async function compressFile(file, targetBytes, formatMode, convertOnly = false) {
   const bitmap = await decodeImage(file);
   const srcMime = (file.type || '').toLowerCase();
 
@@ -456,8 +611,8 @@ async function compressFile(file, targetBytes, formatMode) {
     }
   }
 
-  // 自动模式：原图已达标 → 直接保留原文件
-  if (formatMode === 'auto' && file.size <= targetBytes) {
+  // 自动模式：原图已达标 → 直接保留原文件（仅压缩模式；转换模式永远重编码）
+  if (!convertOnly && formatMode === 'auto' && file.size <= targetBytes) {
     const m = file.name.match(/\.([a-z0-9]+)$/i);
     return {
       blob: file, width: bitmap.width, height: bitmap.height,
@@ -485,6 +640,29 @@ async function compressFile(file, targetBytes, formatMode) {
     candidates = [supportsAvif ? 'avif' : 'webp'];
   } else {
     candidates = [formatMode];
+  }
+
+  // 仅格式转换：不压缩体积，原分辨率按目标格式全质量重编码
+  if (convertOnly) {
+    const [fmt] = candidates;
+    const [mime, ext] = fmtMap[fmt];
+    const fillWhite = mime === 'image/jpeg';
+    const blob = await new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      canvas.toBlob((res) => resolve(res), mime, fmt === 'png' ? undefined : 1);
+    });
+    return {
+      blob, width, height, ext, quality: 1,
+      resized: maxDimResized,
+      converted: fmt !== srcFmt,
+      convertOnly: true,
+    };
   }
 
   // 编码器
@@ -571,6 +749,37 @@ async function compressFile(file, targetBytes, formatMode) {
   }
   return globalFeasible || globalBest;
 }
+
+/* ---------------- 提交反馈 ---------------- */
+const feedbackModal = document.getElementById('feedbackModal');
+const feedbackBtn = document.getElementById('feedbackBtn');
+const feedbackText = document.getElementById('feedbackText');
+const feedbackCancel = document.getElementById('feedbackCancel');
+const feedbackSubmit = document.getElementById('feedbackSubmit');
+
+function openFeedback() { feedbackModal.hidden = false; feedbackText.value = ''; feedbackText.focus(); }
+function closeFeedback() { feedbackModal.hidden = true; }
+
+feedbackBtn.addEventListener('click', openFeedback);
+feedbackCancel.addEventListener('click', closeFeedback);
+feedbackModal.addEventListener('click', (e) => { if (e.target === feedbackModal) closeFeedback(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !feedbackModal.hidden) closeFeedback();
+});
+
+feedbackSubmit.addEventListener('click', () => {
+  const text = feedbackText.value.trim();
+  if (!text) { toast(t('fbEmpty'), true); return; }
+  const url = 'https://github.com/FIERsity/tinypress/issues/new?title=' +
+    encodeURIComponent('[Feedback] ' + text.slice(0, 60)) +
+    '&body=' + encodeURIComponent(text + '\n\n---\nSubmitted via TinyPress');
+  window.open(url, '_blank', 'noopener');
+  toast(t('fbOk'));
+  closeFeedback();
+});
+
+// 初始化语言（依赖 DOM 元素，放最后）
+applyLang();
 
 /* ---------------- 清空 ---------------- */
 document.getElementById('clearAll').addEventListener('click', () => {
