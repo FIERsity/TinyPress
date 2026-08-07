@@ -91,7 +91,7 @@ if (r.resized) {
 dimsEl.innerHTML = `${r.width} × ${r.height} <span class="warn">(已降分辨率)</span>`;
 }
 const base = file.name.replace(/\.[^.]+$/, '');
-btn.textContent = `下载 ${r.ext.toUpperCase()}`;
+btn.textContent = `下载 ${(r.ext || 'jpg').toUpperCase()}`;
 btn.dataset.blobUrl = '';
 }
 const dl = () => {
