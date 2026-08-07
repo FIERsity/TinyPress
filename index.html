@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图压 TinyPress · 图片压缩到指定大小</title>
+  <meta name="description" content="纯前端图片压缩工具：上传图片，把文件压缩到指定大小以下（如 100KB / 500KB / 1MB），图片不会上传到任何服务器。" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='6' width='28' height='20' rx='4' fill='%233b82f6'/%3E%3Ccircle cx='11' cy='13' r='3' fill='%23fff'/%3E%3Cpath d='M6 22l6-6 4 4 4-4 6 6z' fill='%23fff'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
+            <rect x="2" y="6" width="28" height="20" rx="4" fill="currentColor"/>
+            <circle cx="11" cy="13" r="3" fill="#fff"/>
+            <path d="M6 22l6-6 4 4 4-4 6 6z" fill="#fff"/>
+          </svg>
+        </div>
+        <div>
+          <h1>图压 <span class="brand-sub">TinyPress</span></h1>
+          <p class="tagline">把图片压缩到「指定大小以下」</p>
+        </div>
+      </div>
+      <span class="privacy-badge">🔒 纯本地处理 · 图片不上传</span>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 上传区 -->
+    <section class="card drop-card" id="dropzone" tabindex="0" role="button" aria-label="上传图片">
+      <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      <div class="drop-inner" id="dropInner">
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="drop-title">点击选择图片，或直接拖拽到此处</p>
+        <p class="drop-hint">支持 JPG / PNG / WebP / GIF，可一次禁艺多张</p>
+      </div>
+    </section>
+
+    <!-- 设置区 -->
+    <section class="card settings-card">
+      <div class="settings-row">
+        <div class="setting-group">
+          <label class="setting-label">目标大小</label>
+          <div class="preset-btns" id="presetBtns">
+            <button type="button" class="preset active" data-kb="100">100KB</button>
+            <button type="button" class="preset" data-kb="200">200KB</button>
+            <button type="button" class="preset" data-kb="500">500KB</button>
+            <button type="button" class="preset" data-kb="1024">1MB</button>
+            <button type="button" class="preset" data-kb="2048">2MB</button>
+          </div>
+          <div class="custom-size">
+            <input type="number" id="customSize" min="10" max="102400" placeholder="自定义 KB" />
+            <span class="unit">KB</span>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label class="setting-label">输出格式</label>
+          <div class="preset-btns" id="formatBtns">
+            <button type="button" class="preset active" data-format="auto">自动</button>
+            <button type="button" class="preset" data-format="jpeg">JPEG</button>
+            <button type="button" class="preset" data-format="webp">WebP</button>
+            <button type="button" class="preset" data-format="png">PNG</button>
+          </div>
+          <p class="setting-note" id="formatNote">自动：有透明背景 → WebP，否则 → JPEG（体积最小）</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 结果区 -->
+    <section class="results" id="results" hidden>
+      <div class="results-head">
+        <h2>压缩结果</h2>
+        <button type="button" class="btn-ghost" id="clearAll">清空</button>
+      </div>
+      <div class="result-grid" id="resultGrid"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>图压 TinyPress · 纯前端开源工具 · 图片仅在本地浏览器中处理，绝不上传</p>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
