@@ -47,13 +47,14 @@ const I18N = {
     tagline: '简单快捷的图片压缩工具',
     privacy: '纯本地处理',
     langZh: '中', langEn: 'EN',
+    customAria: '自定义目标大小',
     feedback: '提交反馈',
     dropAria: '上传图片',
     dropTitle: '点击选择图片，拖拽或粘贴上传',
     dropHint: '支持 JPG / PNG / WebP / AVIF / GIF / HEIC，可一次选择多张',
     targetLabel: '目标大小',
     convertOnly: '仅转换',
-    customPh: '自定义 KB',
+    customPh: '自定义',
     formatLabel: '输出格式',
     fmtAuto: '自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。',
     fmtJpeg: 'JPEG：照片类最合适，透明区域会填充白色',
@@ -100,13 +101,14 @@ const I18N = {
     tagline: 'A simple, fast image compression tool',
     privacy: '100% local',
     langZh: '中', langEn: 'EN',
+    customAria: 'Custom target size',
     feedback: 'Feedback',
     dropAria: 'Upload images',
     dropTitle: 'Click to select, drag & drop, or paste',
     dropHint: 'JPG / PNG / WebP / AVIF / GIF / HEIC, multiple files supported',
     targetLabel: 'Target size',
     convertOnly: 'Convert only',
-    customPh: 'Custom KB',
+    customPh: 'Custom',
     formatLabel: 'Output format',
     fmtAuto: 'Auto: keeps the original format; falls back to WebP → AVIF / JPEG only when needed.',
     fmtJpeg: 'JPEG: best for photos; transparent areas become white',
@@ -187,6 +189,8 @@ const customSize = document.getElementById('customSize');
 const formatBtns = document.getElementById('formatBtns');
 const formatNote = document.getElementById('formatNote');
 
+const customWrap = document.getElementById('customWrap');
+
 function setTarget(kb) {
   kb = Math.round(Number(kb));
   state.convertOnly = kb === -1;
@@ -194,13 +198,17 @@ function setTarget(kb) {
     state.targetBytes = 1024 * 1024;
     [...presetBtns.children].forEach((b) =>
       b.classList.toggle('active', b.dataset.kb === '-1'));
+    customWrap.classList.remove('active');
     if (customSize.value !== '') customSize.value = '';
   } else {
     kb = Math.max(10, Math.min(102400, kb || 100));
     state.targetBytes = kb * 1024;
     [...presetBtns.children].forEach((b) =>
       b.classList.toggle('active', Number(b.dataset.kb) === kb));
-    if (String(customSize.value) !== String(kb)) customSize.value = '';
+    // 预设命中 → 取消自定义选中；自定义值 → 高亮胶囊
+    const isPreset = [...presetBtns.children].some((b) => Number(b.dataset.kb) === kb);
+    customWrap.classList.toggle('active', !isPreset && customSize.value !== '');
+    if (!isPreset && String(customSize.value) !== String(kb)) customSize.value = kb;
   }
 }
 
@@ -210,6 +218,14 @@ presetBtns.addEventListener('click', (e) => {
   setTarget(Number(btn.dataset.kb));
 });
 
+customWrap.addEventListener('click', () => customSize.focus());
+customWrap.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); customSize.focus(); }
+});
+customSize.addEventListener('focus', () => customWrap.classList.add('active'));
+customSize.addEventListener('input', () => {
+  if (customSize.value !== '') customWrap.classList.add('active');
+});
 customSize.addEventListener('change', () => {
   const v = Number(customSize.value);
   if (!v || v < 10) { customSize.value = ''; return; }

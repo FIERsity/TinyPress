@@ -81,13 +81,28 @@ body {
 .preset.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .preset.convert-preset { border-style: dashed; }
 .preset.convert-preset.active { background: var(--green); border-color: var(--green); border-style: solid; }
-.custom-size { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
-.custom-size input {
-  width: 110px; font: inherit; font-size: 13px; padding: 6px 10px;
-  border: 1px solid var(--border); border-radius: 8px; outline: none;
+.custom-size {
+  display: inline-flex; align-items: center; gap: 2px; margin-top: 10px;
+  font: inherit; font-size: 13px; padding: 0 14px 0 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+  cursor: pointer; transition: all 0.15s;
 }
-.custom-size input:focus { border-color: var(--primary); }
-.unit { font-size: 13px; color: var(--muted); }
+.custom-size:hover { border-color: var(--primary); color: var(--primary); }
+.custom-size.active,
+.custom-size.active:hover {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+.custom-size input {
+  width: 64px; font: inherit; font-size: 13px; padding: 6px 2px;
+  border: none; outline: none; background: transparent; color: inherit;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.custom-size input::-webkit-outer-spin-button,
+.custom-size input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.custom-size input::placeholder { color: inherit; opacity: 0.75; }
+.custom-size.active input::placeholder { color: rgba(255,255,255,0.85); }
+.custom-size.active .unit { color: #fff; }
+.unit { font-size: 12px; color: var(--muted); }
 .setting-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
 
 /* ---------- 已选文件列表 ---------- */

@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <header class="site-header">
@@ -70,8 +70,8 @@
             <button type="button" class="preset" data-kb="25600">25MB</button>
             <button type="button" class="preset convert-preset" data-kb="-1" data-i18n="convertOnly">仅转换</button>
           </div>
-          <div class="custom-size">
-            <input type="number" id="customSize" min="10" max="102400" data-i18n-ph="customPh" placeholder="自定义 KB" />
+          <div class="custom-size" id="customWrap" role="button" tabindex="0" data-i18n-aria="customAria">
+            <input type="number" id="customSize" min="10" max="102400" data-i18n-ph="customPh" placeholder="自定义" />
             <span class="unit">KB</span>
           </div>
         </div>
@@ -130,6 +130,6 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
