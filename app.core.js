@@ -92,22 +92,22 @@ if (effType === 'image/png') {
 let w = width, h = height;
 for (let i = 0; i < 40; i++) {
 const blob = await encode(w, h, 1);
-if (blob.size <= targetBytes) return { blob, width: w, height: h, quality: 1, resized: resized || w < bitmap.width };
+if (blob.size <= targetBytes) return { blob, width: w, height: h, quality: 1, ext, resized: resized || w < bitmap.width };
 w = Math.max(1, Math.round(w * 0.85));
 h = Math.max(1, Math.round(h * 0.85));
 }
 const blob = await encode(w, h, 1);
-return { blob, width: w, height: h, quality: 1, resized: true };
+return { blob, width: w, height: h, quality: 1, ext, resized: true };
 }
 let result = await searchQuality(width, height, encode, targetBytes);
-if (result) return { ...result, resized };
+if (result) return { ...result, resized, ext };
 let w = Math.round(width * 0.8), h = Math.round(height * 0.8);
 while (w >= 8 && h >= 8) {
 const r = await searchQuality(w, h, encode, targetBytes, 0.85);
-if (r) return { ...r, resized: true };
+if (r) return { ...r, resized: true, ext };
 w = Math.round(w * 0.8);
 h = Math.round(h * 0.8);
 }
 const blob = await encode(Math.max(1, w), Math.max(1, h), 0.5);
-return { blob, width: Math.max(1, w), height: Math.max(1, h), quality: 0.5, resized: true };
+return { blob, width: Math.max(1, w), height: Math.max(1, h), quality: 0.5, ext, resized: true };
 }
