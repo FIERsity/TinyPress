@@ -105,8 +105,9 @@ body {
 
 /* ---------- Results ---------- */
 .results { margin-top: 28px; }
-.results-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.results-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
 .results-head h2 { font-size: 18px; }
+.results-actions { display: flex; gap: 8px; }
 .btn-ghost {
   font: inherit; font-size: 13px; color: var(--muted); background: none;
   border: 1px solid var(--border); padding: 5px 12px; border-radius: 8px; cursor: pointer;
@@ -124,6 +125,39 @@ body {
   width: 100%; aspect-ratio: 16 / 10; object-fit: contain;
   background: #f0f2f7; display: block;
 }
+.compare {
+  position: relative; aspect-ratio: 16 / 10; overflow: hidden;
+  background: #f0f2f7; user-select: none; -webkit-user-select: none;
+}
+.compare .cmp-after,
+.compare .cmp-before {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none; display: block;
+}
+.compare .cmp-before { clip-path: inset(0 calc(100% - var(--pos, 50%)) 0 0); }
+.compare .cmp-after { clip-path: inset(0 0 0 var(--pos, 50%)); }
+.compare input[type="range"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: ew-resize; z-index: 3; touch-action: none;
+}
+.compare .cmp-handle {
+  position: absolute; top: 0; bottom: 0; left: var(--pos, 50%);
+  width: 2px; background: rgba(31, 36, 48, 0.45); pointer-events: none;
+  transform: translateX(-1px); z-index: 2;
+}
+.compare .cmp-handle::after {
+  content: "◂ ▸"; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); background: rgba(31, 36, 48, 0.75);
+  color: #fff; font-size: 11px; line-height: 1; padding: 6px 5px; border-radius: 8px;
+  letter-spacing: 1px; white-space: nowrap;
+}
+.compare .cmp-label {
+  position: absolute; top: 8px; font-size: 11px; font-weight: 600;
+  padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,0.9);
+  color: #374151; z-index: 2; pointer-events: none;
+}
+.compare .cmp-label.orig { left: 8px; }
+.compare .cmp-label.comp { right: 8px; }
 .result-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
 .result-name { font-size: 14px; font-weight: 600; word-break: break-all; display: flex; justify-content: space-between; gap: 8px; }
 .result-name .state { font-size: 12px; font-weight: 500; white-space: nowrap; }

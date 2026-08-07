@@ -8,7 +8,7 @@
 
 /* ---------------- 状态 ---------------- */
 const state = {
-  targetBytes: 100 * 1024, // 默认 100KB
+  targetBytes: 1024 * 1024, // 默认 1MB（GitHub 头像等常见门槛）
   format: 'auto',          // auto | jpeg | webp | png
   files: [],               // 待压缩文件
   processing: false,
@@ -176,14 +176,24 @@ compressBtn.addEventListener('click', async () => {
   state.processing = false;
   updateCompressBtn();
   compressBtn.textContent = '压缩';
+  updateDownloadAllBtn();
 });
 
 /* ---------------- 结果卡片 ---------------- */
+const doneResults = []; // {file, result} 用于打包下载
+
 function createCard(file) {
   const card = document.createElement('div');
   card.className = 'result-card';
   card.innerHTML =
-    '<img class="result-thumb" alt="" />' +
+    '<div class="compare">' +
+      '<span class="cmp-label orig">原图</span>' +
+      '<span class="cmp-label comp">压缩后</span>' +
+      '<img class="cmp-before" alt="原图" />' +
+      '<img class="cmp-after" alt="压缩后" />' +
+      '<div class="cmp-handle"></div>' +
+      '<input type="range" class="cmp-range" min="0" max="100" value="50" aria-label="对比滑杆" />' +
+    '</div>' +
     '<div class="result-body">' +
       '<div class="result-name"><span class="name">' + escapeHtml(file.name) + '</span><span class="state">压缩中…</span></div>' +
       '<div class="stat-row"><span>原始大小</span><b>' + fmtBytes(file.size) + '</b></div>' +
@@ -195,12 +205,18 @@ function createCard(file) {
     '</div>';
   resultGrid.appendChild(card);
 
-  const url = URL.createObjectURL(file);
-  card.querySelector('.result-thumb').src = url;
+  const origUrl = URL.createObjectURL(file);
+  card.querySelector('.cmp-before').src = origUrl;
+  const range = card.querySelector('.cmp-range');
+  const applyPos = () => card.querySelector('.compare').style.setProperty('--pos', range.value + '%');
+  applyPos();
+  range.addEventListener('input', applyPos);
   return card;
 }
 
 function renderResult(card, file, r) {
+  doneResults.push({ file, result: r });
+  card.querySelector('.cmp-after').src = URL.createObjectURL(r.blob);
   const nameEl = card.querySelector('.name');
   const stateEl = card.querySelector('.state');
   const sizeOut = card.querySelector('.size-out');
@@ -265,6 +281,54 @@ function renderError(card, file, err) {
   btn.textContent = '无法处理';
   btn.disabled = true;
 }
+
+/* ---------------- 打包下载 ---------------- */
+const downloadAllBtn = document.getElementById('downloadAll');
+
+function updateDownloadAllBtn() {
+  downloadAllBtn.disabled = doneResults.length === 0;
+}
+
+let jszipPromise = null;
+function loadJSZip() {
+  if (jszipPromise) return jszipPromise;
+  jszipPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'jszip.min.js';
+    script.onload = () => resolve(window.JSZip);
+    script.onerror = () => reject(new Error('打包库加载失败'));
+    document.head.appendChild(script);
+  });
+  return jszipPromise;
+}
+
+downloadAllBtn.addEventListener('click', async () => {
+  if (!doneResults.length) return;
+  try {
+    downloadAllBtn.disabled = true;
+    downloadAllBtn.textContent = '打包中…';
+    const JSZip = await loadJSZip();
+    const zip = new JSZip();
+    for (const { file, result } of doneResults) {
+      const base = file.name.replace(/\.[^.]+$/, '');
+      const ext = (result.ext || 'jpg').toLowerCase();
+      zip.file(base + '_compressed.' + ext, result.blob);
+    }
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tinypress-' + doneResults.length + '张.zip';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('已打包 ' + doneResults.length + ' 张图片');
+  } catch (err) {
+    console.error('打包失败:', err);
+    toast(err.message || '打包失败', true);
+  } finally {
+    downloadAllBtn.textContent = '打包下载';
+    updateDownloadAllBtn();
+  }
+});
 
 /* =====================================================================
  * 压缩核心
@@ -499,6 +563,8 @@ async function compressFile(file, targetBytes, formatMode) {
 document.getElementById('clearAll').addEventListener('click', () => {
   resultGrid.innerHTML = '';
   results.hidden = true;
+  doneResults.length = 0;
+  updateDownloadAllBtn();
 });
 
 /* ---------------- PWA: 注册 Service Worker ---------------- */

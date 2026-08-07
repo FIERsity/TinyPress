@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <header class="site-header">
@@ -54,16 +54,17 @@
         <div class="setting-group">
           <label class="setting-label">目标大小</label>
           <div class="preset-btns" id="presetBtns">
-            <button type="button" class="preset active" data-kb="100">100KB</button>
-            <button type="button" class="preset" data-kb="200">200KB</button>
-            <button type="button" class="preset" data-kb="500">500KB</button>
-            <button type="button" class="preset" data-kb="1024">1MB</button>
+            <button type="button" class="preset active" data-kb="1024">1MB</button>
             <button type="button" class="preset" data-kb="2048">2MB</button>
+            <button type="button" class="preset" data-kb="5120">5MB</button>
+            <button type="button" class="preset" data-kb="10240">10MB</button>
+            <button type="button" class="preset" data-kb="25600">25MB</button>
           </div>
           <div class="custom-size">
             <input type="number" id="customSize" min="10" max="102400" placeholder="自定义 KB" />
             <span class="unit">KB</span>
           </div>
+          <p class="setting-note">常见限制参考：GitHub 头像 1MB · 公众号图片 10MB · 邮件附件 25MB</p>
         </div>
         <div class="setting-group">
           <label class="setting-label">输出格式</label>
@@ -90,7 +91,10 @@
     <section class="results" id="results" hidden>
       <div class="results-head">
         <h2>压缩结果</h2>
-        <button type="button" class="btn-ghost" id="clearAll">清空</button>
+        <div class="results-actions">
+          <button type="button" class="btn-ghost" id="downloadAll" disabled>打包下载</button>
+          <button type="button" class="btn-ghost" id="clearAll">清空</button>
+        </div>
       </div>
       <div class="result-grid" id="resultGrid"></div>
     </section>
@@ -104,6 +108,6 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
