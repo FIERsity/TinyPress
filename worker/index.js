@@ -42,6 +42,21 @@ export default {
       return serveView(env);
     }
 
+    // 清空全部反馈（需 READ_SECRET）
+    if (url.pathname === '/clear' && request.method === 'POST') {
+      const secret = (request.headers.get('X-Secret') || '').trim();
+      if (secret !== env.READ_SECRET) {
+        return json({ error: 'Forbidden' }, 403, allowed);
+      }
+      const list = await env.TINYPRESS_FEEDBACK.list({ prefix: 'fb:' });
+      let removed = 0;
+      for (const k of list.keys) {
+        await env.TINYPRESS_FEEDBACK.delete(k.name);
+        removed++;
+      }
+      return json({ ok: true, removed }, 200, allowed);
+    }
+
     if (url.pathname !== '/feedback' || request.method !== 'POST') {
       return json({ error: 'Not found' }, 404, allowed);
     }
