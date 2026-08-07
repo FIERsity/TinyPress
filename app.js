@@ -398,3 +398,10 @@ document.getElementById('clearAll').addEventListener('click', () => {
   resultGrid.innerHTML = '';
   results.hidden = true;
 });
+
+/* ---------------- PWA: 注册 Service Worker ---------------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
