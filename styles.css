@@ -35,11 +35,8 @@ body {
 .brand h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
 .brand-sub { color: var(--muted); font-size: 14px; font-weight: 500; margin-left: 4px; }
 .tagline { font-size: 13px; color: var(--muted); }
-.privacy-badge {
-  font-size: 13px; color: var(--green); background: rgba(16, 185, 129, 0.08);
-  padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(16, 185, 129, 0.25);
-  white-space: nowrap;
-}
+/* 右上角隐私说明：与 tagline 完全一致的字号/颜色/字体，无框无底色，仅靠布局靠右 */
+.privacy-note { font-size: 13px; color: var(--muted); white-space: nowrap; }
 
 /* ---------- Cards ---------- */
 .card {
@@ -55,12 +52,10 @@ body {
 .drop-card { border: 2px dashed #c9d4e8; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
 .drop-card:hover, .drop-card:focus-visible { border-color: var(--primary); background: #f0f6ff; outline: none; }
 .drop-card.dragover { border-color: var(--primary); background: #e8f1ff; }
-.drop-card.busy { pointer-events: none; opacity: 0.75; }
 .drop-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 34px 16px; text-align: center; }
 .drop-icon { color: var(--primary); opacity: 0.85; }
 .drop-title { font-size: 16px; font-weight: 600; }
 .drop-hint { font-size: 13px; color: var(--muted); }
-.drop-progress { font-size: 13px; color: var(--primary); font-weight: 500; min-height: 20px; }
 
 /* ---------- Settings ---------- */
 .settings-row { display: flex; flex-direction: column; gap: 18px; }
@@ -83,6 +78,30 @@ body {
 .custom-size input:focus { border-color: var(--primary); }
 .unit { font-size: 13px; color: var(--muted); }
 .setting-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+/* ---------- 已选文件列表 ---------- */
+.file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; }
+.file-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 9px; font-size: 13px;
+}
+.file-name { word-break: break-all; flex: 1; min-width: 0; }
+.file-size { color: var(--muted); white-space: nowrap; }
+.file-remove {
+  border: none; background: none; color: var(--muted); font-size: 16px; cursor: pointer;
+  padding: 0 4px; line-height: 1;
+}
+.file-remove:hover { color: var(--red); }
+.selected-info { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 20px; }
+
+/* ---------- 压缩按钮 ---------- */
+.btn-compress {
+  width: 100%; margin-top: 18px; font: inherit; font-size: 16px; font-weight: 600; color: #fff;
+  background: var(--primary); border: none; border-radius: 11px; padding: 13px 16px;
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-compress:hover:not(:disabled) { background: var(--primary-dark); }
+.btn-compress:disabled { background: #c3d4f2; cursor: not-allowed; }
 
 /* ---------- Results ---------- */
 .results { margin-top: 28px; }
