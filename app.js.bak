@@ -70,10 +70,9 @@ function setFormat(fmt) {
   [...formatBtns.children].forEach((b) =>
     b.classList.toggle('active', b.dataset.format === fmt));
   const notes = {
-    auto: '自动：优先 AVIF（体积最小），不支持时 → WebP / JPEG',
+    auto: '自动：有透明背景 → WebP，否则 → JPEG（体积最小）',
     jpeg: 'JPEG：照片类最合适，透明区域会填充白色',
     webp: 'WebP：体积小、支持透明',
-    avif: 'AVIF：当前压缩率最好的格式，浏览器不支持时自动回退',
     png: 'PNG：无损格式，只缩小分辨率不损失画质',
   };
   formatNote.textContent = notes[fmt] || '';
@@ -224,8 +223,7 @@ function renderResult(card, file, r) {
   } else {
     const savedRatio = 1 - r.blob.size / file.size;
     const underTarget = r.blob.size <= state.targetBytes;
-    const inRange = r.blob.size >= state.targetBytes * (1 - RANGE_RATIO);
-    stateEl.textContent = inRange ? '压缩完成' : (underTarget ? '已达标' : '尽力压缩');
+    stateEl.textContent = underTarget ? '压缩完成' : '尽力压缩';
     stateEl.className = 'state ' + (underTarget ? 'ok' : 'err');
     sizeOut.textContent = fmtBytes(r.blob.size);
     savedEl.textContent = savedRatio > 0 ? '−' + fmtPct(savedRatio) : '+0%';
@@ -295,31 +293,21 @@ function detectAlpha(bitmap) {
   return false;
 }
 
-/**
- * 二分搜索质量。
- * - 目标区间 [minBytes, targetBytes]，minBytes = targetBytes * (1 - RANGE_RATIO)
- * - 优先返回「不超上限、且尽可能接近上限」的质量（落在区间内）
- * - 若没有任何质量落在区间内，返回不超上限的最高质量（尽力而为）
- */
-const RANGE_RATIO = 0.15; // 区间宽度：目标值的 ±15% 以内视为达标
-
+/** 二分搜索质量，返回「不超过 targetBytes 的最高质量」 */
 async function searchQuality(w, h, encode, targetBytes, maxQ = 1) {
-  let lo = 0.04, hi = maxQ;
-  let best = null;      // 不超上限的最高质量
-  let inRange = null;   // 落在区间内的最高质量
-  const minBytes = targetBytes * (1 - RANGE_RATIO);
-  for (let i = 0; i < 12; i++) {
+  let lo = 0.03, hi = maxQ;
+  let best = null;
+  for (let i = 0; i < 9; i++) {
     const mid = (lo + hi) / 2;
     const blob = await encode(w, h, mid);
     if (blob.size <= targetBytes) {
-      best = { blob, width: w, height: h, quality: mid, size: blob.size };
-      if (blob.size >= minBytes) inRange = best;
+      best = { blob, width: w, height: h, quality: mid };
       lo = mid + 0.02;
     } else {
       hi = mid - 0.02;
     }
   }
-  return inRange || best;
+  return best;
 }
 
 /** 压缩单个文件到目标大小以下。所有返回路径均携带 ext。 */
@@ -327,20 +315,15 @@ async function compressFile(file, targetBytes, formatMode) {
   const bitmap = await decodeImage(file);
 
   // 决定输出格式与扩展名
-  const supportsAvif = typeof HTMLCanvasElement !== 'undefined' &&
-    document.createElement('canvas').toDataURL('image/avif').startsWith('data:image/avif');
   let effType, ext;
   if (formatMode === 'jpeg') { effType = 'image/jpeg'; ext = 'jpg'; }
   else if (formatMode === 'webp') { effType = 'image/webp'; ext = 'webp'; }
   else if (formatMode === 'png') { effType = 'image/png'; ext = 'png'; }
-  else if (formatMode === 'avif' && supportsAvif) { effType = 'image/avif'; ext = 'avif'; }
   else {
     const hasAlpha = detectAlpha(bitmap);
     const src = (file.type || '').toLowerCase();
     const maybeTransparent = src.includes('png') || src.includes('gif') || src.includes('webp') || src.includes('svg');
-    if (supportsAvif) {
-      effType = 'image/avif'; ext = 'avif';
-    } else if (hasAlpha && (maybeTransparent || !src.includes('jpeg'))) {
+    if (hasAlpha && (maybeTransparent || !src.includes('jpeg'))) {
       effType = 'image/webp'; ext = 'webp';
     } else {
       effType = 'image/jpeg'; ext = 'jpg';
@@ -394,14 +377,14 @@ async function compressFile(file, targetBytes, formatMode) {
     return { blob, width: w, height: h, quality: 1, ext, resized: true };
   }
 
-  // 有损 JPEG/WebP/AVIF：二分搜索质量（优先落在目标区间内）
+  // 有损 JPEG/WebP：二分搜索质量
   let result = await searchQuality(width, height, encode, targetBytes);
   if (result) return { ...result, ext, resized };
 
-  // 质量到底仍超目标 → 逐步缩小分辨率（质量上限保持 1.0，不再人为限制）
+  // 质量到底仍超目标 → 逐步缩小分辨率
   let w = Math.round(width * 0.8), h = Math.round(height * 0.8);
   while (w >= 8 && h >= 8) {
-    const r = await searchQuality(w, h, encode, targetBytes, 1);
+    const r = await searchQuality(w, h, encode, targetBytes, 0.85);
     if (r) return { ...r, ext, resized: true };
     w = Math.round(w * 0.8);
     h = Math.round(h * 0.8);

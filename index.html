@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>图压 TinyPress · 图片压缩到指定大小</title>
-  <meta name="description" content="纯前端图片压缩工具：上传图片，把文件压缩到指定大小以下（如 100KB / 500KB / 1MB），图片不会上传到任何服务器。" />
+  <meta name="description" content="纯前端图片压缩工具：上传图片，把文件压缩到目标大小区间内（如 100KB / 500KB / 1MB），图片不会上传到任何服务器。" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='6' width='28' height='20' rx='4' fill='%233b82f6'/%3E%3Ccircle cx='11' cy='13' r='3' fill='%23fff'/%3E%3Cpath d='M6 22l6-6 4 4 4-4 6 6z' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="manifest" href="manifest.webmanifest?v=1" />
   <meta name="theme-color" content="#3b82f6" />
@@ -24,7 +24,7 @@
         </div>
         <div>
           <h1>图压 <span class="brand-sub">TinyPress</span></h1>
-          <p class="tagline">把图片压缩到「指定大小以下」</p>
+          <p class="tagline">把图片压到「目标区间内」</p>
         </div>
       </div>
       <p class="privacy-note">纯本地处理 · 图片不上传</p>
@@ -44,7 +44,7 @@
           </svg>
         </div>
         <p class="drop-title">点击选择图片，或直接拖拽到此处</p>
-        <p class="drop-hint">支持 JPG / PNG / WebP / GIF，可一次选择多张</p>
+        <p class="drop-hint">支持 JPG / PNG / WebP / AVIF / GIF，可一次选择多张</p>
       </div>
     </section>
 
@@ -71,6 +71,7 @@
             <button type="button" class="preset active" data-format="auto">自动</button>
             <button type="button" class="preset" data-format="jpeg">JPEG</button>
             <button type="button" class="preset" data-format="webp">WebP</button>
+            <button type="button" class="preset" data-format="avif">AVIF</button>
             <button type="button" class="preset" data-format="png">PNG</button>
           </div>
           <p class="setting-note" id="formatNote">自动：有透明背景 → WebP，否则 → JPEG（体积最小）</p>
