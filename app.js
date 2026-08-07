@@ -72,7 +72,7 @@ const I18N = {
     selectImages: '请选择图片文件',
     selected: '已选 {n} 张，共 {size}',
     fbTitle: '提交反馈',
-    fbHint: '反馈将以公开 Issue 发布到 GitHub，请勿填写敏感信息。',
+    fbHint: '反馈会直接发送给开发者，请勿填写敏感信息。',
     fbPlaceholder: '遇到了什么问题？或有什么建议？',
     fbCancel: '取消',
     fbSubmit: '提交',
@@ -125,7 +125,7 @@ const I18N = {
     selectImages: 'Please choose image files',
     selected: '{n} selected, {size} total',
     fbTitle: 'Send feedback',
-    fbHint: 'Feedback is published as a public GitHub issue. Please don\'t include sensitive info.',
+    fbHint: 'Feedback goes directly to the developer. Please don\'t include sensitive info.',
     fbPlaceholder: 'What problem did you run into? Any suggestions?',
     fbCancel: 'Cancel',
     fbSubmit: 'Send',
@@ -767,15 +767,28 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !feedbackModal.hidden) closeFeedback();
 });
 
-feedbackSubmit.addEventListener('click', () => {
+feedbackSubmit.addEventListener('click', async () => {
   const text = feedbackText.value.trim();
   if (!text) { toast(t('fbEmpty'), true); return; }
-  const url = 'https://github.com/FIERsity/tinypress/issues/new?title=' +
-    encodeURIComponent('[Feedback] ' + text.slice(0, 60)) +
-    '&body=' + encodeURIComponent(text + '\n\n---\nSubmitted via TinyPress');
-  window.open(url, '_blank', 'noopener');
-  toast(t('fbOk'));
-  closeFeedback();
+  try {
+    feedbackSubmit.disabled = true;
+    feedbackSubmit.textContent = t('fbSending');
+    const res = await fetch('https://feedback.070315.site/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    toast(t('fbOk'));
+    closeFeedback();
+  } catch (err) {
+    console.error('反馈提交失败:', err);
+    toast(t('fbFail'), true);
+  } finally {
+    feedbackSubmit.disabled = false;
+    feedbackSubmit.textContent = t('fbSubmit');
+  }
 });
 
 // 初始化语言（依赖 DOM 元素，放最后）
