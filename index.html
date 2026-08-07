@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
   <header class="site-header">
@@ -74,7 +74,7 @@
             <button type="button" class="preset" data-format="avif">AVIF</button>
             <button type="button" class="preset" data-format="png">PNG</button>
           </div>
-          <p class="setting-note" id="formatNote">自动：有透明背景 → WebP，否则 → JPEG（体积最小）</p>
+          <p class="setting-note" id="formatNote">自动：默认保持原格式，压不到目标时才按 WebP → AVIF / JPEG 降级</p>
         </div>
       </div>
 
@@ -104,6 +104,6 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

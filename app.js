@@ -70,7 +70,7 @@ function setFormat(fmt) {
   [...formatBtns.children].forEach((b) =>
     b.classList.toggle('active', b.dataset.format === fmt));
   const notes = {
-    auto: '自动：优先 AVIF（体积最小），不支持时 → WebP / JPEG',
+    auto: '自动：默认保持原格式，压不到目标时才按 WebP → AVIF / JPEG 降级',
     jpeg: 'JPEG：照片类最合适，透明区域会填充白色',
     webp: 'WebP：体积小、支持透明',
     avif: 'AVIF：当前压缩率最好的格式，浏览器不支持时自动回退',
@@ -235,6 +235,14 @@ function renderResult(card, file, r) {
     if (r.resized) {
       dimsEl.innerHTML = r.width + ' × ' + r.height + ' <span class="warn">(已降分辨率)</span>';
     }
+    const srcMime = (file.type || '').toLowerCase();
+    const srcSame = (srcMime === 'image/jpeg' && r.ext === 'jpg') ||
+      (srcMime === 'image/png' && r.ext === 'png') ||
+      (srcMime === 'image/webp' && r.ext === 'webp') ||
+      (srcMime === 'image/avif' && r.ext === 'avif');
+    if (r.converted && !srcSame) {
+      dimsEl.innerHTML += ' <span class="warn">(已转 ' + r.ext.toUpperCase() + ')</span>';
+    }
     btn.textContent = '下载 ' + ext.toUpperCase();
   }
 
@@ -303,117 +311,188 @@ function detectAlpha(bitmap) {
  * - 目标区间 [minBytes, targetBytes]，minBytes = targetBytes * (1 - RANGE_RATIO)
  * - 优先返回「不超上限、且尽可能接近上限」的质量（落在区间内）
  * - 若没有任何质量落在区间内，返回不超上限的最高质量（尽力而为）
+ * - maxQ < 1 时步进按 maxQ 自适应（避免 0.02 固定步进在低位区间失效）
  */
 const RANGE_RATIO = 0.15; // 区间宽度：目标值的 ±15% 以内视为达标
+const QUALITY_STEP = 0.02;
 
 async function searchQuality(w, h, encode, targetBytes, maxQ = 1) {
-  let lo = 0.04, hi = maxQ;
+  let lo = 0.04, hi = Math.max(0.04, maxQ);
   let best = null;      // 不超上限的最高质量
   let inRange = null;   // 落在区间内的最高质量
+  let overMin = null;   // 最低质量下的实测（即使超目标，用于估算下一档分辨率）
   const minBytes = targetBytes * (1 - RANGE_RATIO);
+  const step = Math.max(0.001, Math.min(QUALITY_STEP, (hi - lo) / 8));
   for (let i = 0; i < 12; i++) {
     const mid = (lo + hi) / 2;
     const blob = await encode(w, h, mid);
+    const entry = { blob, width: w, height: h, quality: mid, size: blob.size };
+    if (!overMin || mid < overMin.quality) overMin = entry;
     if (blob.size <= targetBytes) {
-      best = { blob, width: w, height: h, quality: mid, size: blob.size };
-      if (blob.size >= minBytes) inRange = best;
-      lo = mid + 0.02;
+      best = entry;
+      if (blob.size >= minBytes) inRange = entry;
+      lo = mid + step;
     } else {
-      hi = mid - 0.02;
+      hi = mid - step;
     }
   }
-  return inRange || best;
+  return inRange || best || overMin;
 }
 
-/** 压缩单个文件到目标大小以下。所有返回路径均携带 ext。 */
+/**
+ * 压缩单个文件到目标大小以下。
+ * - auto：优先保留原格式；压不到目标区间才按通用度降级（原格式 → WebP → AVIF / JPEG）
+ * - 显式格式：强制输出所选格式（AVIF 不支持时回退 WebP）
+ * - 有损压缩：先原尺寸压质量；质量到底仍超目标 → 按体积比例估算下一档分辨率（收敛快、不盲目缩小）
+ * 所有返回路径均携带 ext，并标记 converted（发生过格式转换）。
+ */
 async function compressFile(file, targetBytes, formatMode) {
   const bitmap = await decodeImage(file);
+  const srcMime = (file.type || '').toLowerCase();
 
-  // 决定输出格式与扩展名
+  // AVIF 编码支持检测
   const supportsAvif = typeof HTMLCanvasElement !== 'undefined' &&
     document.createElement('canvas').toDataURL('image/avif').startsWith('data:image/avif');
-  let effType, ext;
-  if (formatMode === 'jpeg') { effType = 'image/jpeg'; ext = 'jpg'; }
-  else if (formatMode === 'webp') { effType = 'image/webp'; ext = 'webp'; }
-  else if (formatMode === 'png') { effType = 'image/png'; ext = 'png'; }
-  else if (formatMode === 'avif') {
-    if (supportsAvif) { effType = 'image/avif'; ext = 'avif'; }
-    else { effType = 'image/webp'; ext = 'webp'; } // 不支持 AVIF → 明确回退 WebP
-  }
-  else {
-    const hasAlpha = detectAlpha(bitmap);
-    const src = (file.type || '').toLowerCase();
-    const maybeTransparent = src.includes('png') || src.includes('gif') || src.includes('webp') || src.includes('svg');
-    if (supportsAvif) {
-      effType = 'image/avif'; ext = 'avif';
-    } else if (hasAlpha && (maybeTransparent || !src.includes('jpeg'))) {
-      effType = 'image/webp'; ext = 'webp';
-    } else {
-      effType = 'image/jpeg'; ext = 'jpg';
-    }
-  }
 
   // 尺寸上限保护（超大图先归一化，避免 Canvas 内存溢出）
   const MAX_DIM = 4096;
   let width = bitmap.width, height = bitmap.height;
   const dimScale = Math.min(1, MAX_DIM / Math.max(width, height));
-  let resized = dimScale < 1;
+  const maxDimResized = dimScale < 1;
   width = Math.max(1, Math.round(width * dimScale));
   height = Math.max(1, Math.round(height * dimScale));
 
-  // 编码器（JPEG 填白底）
-  const fillWhite = effType === 'image/jpeg';
-  const encode = (w, h, quality) => new Promise((resolve) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    canvas.toBlob((blob) => resolve(blob), effType, effType === 'image/png' ? undefined : quality);
-  });
+  // 原始格式（来自 MIME，兜底文件扩展名）
+  let srcFmt = null;
+  if (srcMime === 'image/jpeg' || srcMime === 'image/jpg') srcFmt = 'jpeg';
+  else if (srcMime === 'image/png') srcFmt = 'png';
+  else if (srcMime === 'image/webp') srcFmt = 'webp';
+  else if (srcMime === 'image/avif') srcFmt = 'avif';
+  if (!srcFmt) {
+    const m = file.name.match(/\.([a-z0-9]+)$/i);
+    if (m) {
+      const e = m[1].toLowerCase();
+      if (e === 'jpg' || e === 'jpeg') srcFmt = 'jpeg';
+      else if (e === 'png') srcFmt = 'png';
+      else if (e === 'webp') srcFmt = 'webp';
+      else if (e === 'avif') srcFmt = 'avif';
+    }
+  }
 
-  // 原图已达标：自动格式下直接返回原文件
-  if (file.size <= targetBytes && formatMode === 'auto') {
+  // 自动模式：原图已达标 → 直接保留原文件
+  if (formatMode === 'auto' && file.size <= targetBytes) {
     const m = file.name.match(/\.([a-z0-9]+)$/i);
     return {
       blob: file, width: bitmap.width, height: bitmap.height,
       ext: m ? m[1].toLowerCase() : 'jpg', quality: 1, kept: true,
     };
   }
-  // PNG 无损模式：原图达标也直接保留
-  if (effType === 'image/png' && file.type === 'image/png' && file.size <= targetBytes) {
-    return { blob: file, width: bitmap.width, height: bitmap.height, ext: 'png', quality: 1, kept: true };
+
+  // 候选格式（有序）：auto = 原格式 → WebP → AVIF/JPEG
+  const fmtMap = {
+    jpeg: ['image/jpeg', 'jpg'],
+    webp: ['image/webp', 'webp'],
+    avif: ['image/avif', 'avif'],
+    png: ['image/png', 'png'],
+  };
+  let candidates = [];
+  if (formatMode === 'auto') {
+    const hasAlpha = detectAlpha(bitmap);
+    if (srcFmt) candidates.push(srcFmt);
+    if (srcFmt !== 'webp') candidates.push('webp');
+    if (supportsAvif && srcFmt !== 'avif') candidates.push('avif');
+    // 不透明图再加 JPEG 作为最后兜底（PNG/WebP 已覆盖透明场景）
+    if (!hasAlpha && srcFmt !== 'jpeg' && srcFmt !== 'webp' && srcFmt !== 'avif') candidates.push('jpeg');
+  } else if (formatMode === 'avif') {
+    // 显式 AVIF：不支持时明确回退 WebP
+    candidates = [supportsAvif ? 'avif' : 'webp'];
+  } else {
+    candidates = [formatMode];
+  }
+
+  // 编码器
+  const makeEncode = (fmt) => {
+    const mime = fmtMap[fmt][0];
+    const fillWhite = mime === 'image/jpeg';
+    return (w, h, quality) => new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      canvas.toBlob((blob) => resolve(blob), mime, fmt === 'png' ? undefined : quality);
+    });
+  };
+
+  // 按实测体积比例估算下一档分辨率：
+  // 体积 ∝ 面积（边长平方），边长比例 = sqrt(当前体积 / 目标体积)。
+  // 始终用二分搜索的实测体积，比固定 0.8 步进收敛更快，也不会过度缩小。
+  function nextDim(w, h, measuredSize) {
+    const ratio = Math.sqrt(Math.max(measuredSize, 1) / targetBytes);
+    const scale = Math.max(0.4, Math.min(0.92, ratio));
+    const MIN_DIM = 16;
+    return [
+      Math.max(MIN_DIM, Math.round(w * scale)),
+      Math.max(MIN_DIM, Math.round(h * scale)),
+    ];
   }
 
   // 无损 PNG：只缩小分辨率
-  if (effType === 'image/png') {
+  async function compressLossless(fmt, ext) {
+    const encode = makeEncode('png');
     let w = width, h = height;
     for (let i = 0; i < 40; i++) {
       const blob = await encode(w, h, 1);
-      if (blob.size <= targetBytes) return { blob, width: w, height: h, quality: 1, ext, resized: resized || w < bitmap.width };
-      w = Math.max(1, Math.round(w * 0.85));
-      h = Math.max(1, Math.round(h * 0.85));
+      if (blob.size <= targetBytes) {
+        return { blob, width: w, height: h, quality: 1, ext, resized: maxDimResized || w < bitmap.width, converted: fmt !== srcFmt };
+      }
+      [w, h] = nextDim(w, h, blob.size);
+      if (w <= 16 || h <= 16) break;
     }
     const blob = await encode(w, h, 1);
-    return { blob, width: w, height: h, quality: 1, ext, resized: true };
+    return { blob, width: w, height: h, quality: 1, ext, resized: true, converted: fmt !== srcFmt };
   }
 
-  // 有损 JPEG/WebP/AVIF：二分搜索质量（优先落在目标区间内）
-  let result = await searchQuality(width, height, encode, targetBytes);
-  if (result) return { ...result, ext, resized };
+  // 有损 JPEG/WebP/AVIF：原尺寸压质量；质量到底 → 按体积比例跳档缩小分辨率
+  async function compressLossy(fmt, ext) {
+    const encode = makeEncode(fmt);
+    let best = null;      // 不超上限中体积最小的结果
+    let w = width, h = height;
 
-  // 质量到底仍超目标 → 逐步缩小分辨率（质量上限保持 1.0，不再人为限制）
-  let w = Math.round(width * 0.8), h = Math.round(height * 0.8);
-  while (w >= 8 && h >= 8) {
-    const r = await searchQuality(w, h, encode, targetBytes, 1);
-    if (r) return { ...r, ext, resized: true };
-    w = Math.round(w * 0.8);
-    h = Math.round(h * 0.8);
+    for (let i = 0; i < 30; i++) {
+      const r = await searchQuality(w, h, encode, targetBytes, 1);
+      const meta = { ...r, ext, resized: maxDimResized || w < bitmap.width, converted: fmt !== srcFmt };
+      if (r.blob.size <= targetBytes && (!best || r.blob.size < best.blob.size)) best = meta;
+      if (r.blob.size >= targetBytes * (1 - RANGE_RATIO) && r.blob.size <= targetBytes) return meta;
+      if (w <= 16 || h <= 16) break;
+      // 始终用实测体积估算下一档（即使当前略超目标，也比线性模型准）
+      [w, h] = nextDim(w, h, r.blob.size);
+    }
+
+    if (best) return best;
+    const blob = await encode(w, h, 0.04);
+    return { blob, width: w, height: h, quality: 0.04, ext, resized: true, converted: fmt !== srcFmt };
   }
-  const blob = await encode(Math.max(1, w), Math.max(1, h), 0.5);
-  return { blob, width: Math.max(1, w), height: Math.max(1, h), quality: 0.5, ext, resized: true };
+
+  // 依次尝试候选格式，保留全局最优与全局落在区间内的结果
+  let globalBest = null, globalFeasible = null;
+  for (const fmt of candidates) {
+    const [mime] = fmtMap[fmt];
+    const ext = fmtMap[fmt][1];
+    let r;
+    if (fmt === 'png') r = await compressLossless(fmt, ext);
+    else r = await compressLossy(fmt, ext);
+    if (!globalBest || r.size < globalBest.size || (r.size === globalBest.size && r.quality > globalBest.quality)) {
+      globalBest = r;
+    }
+    if (r.size >= targetBytes * (1 - RANGE_RATIO) && r.size <= targetBytes) {
+      if (!globalFeasible || r.size > globalFeasible.size) globalFeasible = r;
+      if (fmt === candidates[0]) return r; // 首选格式已达标 → 立即返回
+    }
+  }
+  return globalFeasible || globalBest;
 }
 
 /* ---------------- 清空 ---------------- */
