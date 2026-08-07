@@ -1,0 +1,7 @@
+name = "tinypress-feedback"
+main = "index.js"
+compatibility_date = "2025-08-01"
+
+[[kv_namespaces]]
+binding = "TINYPRESS_FEEDBACK"
+id = "1f0469aad2ac4befba048d5b61e2d4bc"

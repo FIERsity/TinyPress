@@ -7,3 +7,7 @@
 
 # 日志
 *.log
+
+# Cloudflare wrangler 本地缓存
+.wrangler/
+worker/.wrangler/
