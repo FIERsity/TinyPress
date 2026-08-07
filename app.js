@@ -70,7 +70,7 @@ function setFormat(fmt) {
   [...formatBtns.children].forEach((b) =>
     b.classList.toggle('active', b.dataset.format === fmt));
   const notes = {
-    auto: '自动：默认保持原格式，压不到目标时才按 WebP → AVIF / JPEG 降级',
+    auto: '自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。',
     jpeg: 'JPEG：照片类最合适，透明区域会填充白色',
     webp: 'WebP：体积小、支持透明',
     avif: 'AVIF：当前压缩率最好的格式，浏览器不支持时自动回退',

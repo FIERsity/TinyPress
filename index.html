@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
 </head>
 <body>
   <header class="site-header">
@@ -24,10 +24,10 @@
         </div>
         <div>
           <h1>图压 <span class="brand-sub">TinyPress</span></h1>
-          <p class="tagline">把图片压到「目标区间内」</p>
+          <p class="tagline">简单快捷的图片压缩工具</p>
         </div>
       </div>
-      <p class="privacy-note">纯本地处理 · 图片不上传</p>
+      <p class="privacy-note">纯本地处理</p>
     </div>
   </header>
 
@@ -74,7 +74,7 @@
             <button type="button" class="preset" data-format="avif">AVIF</button>
             <button type="button" class="preset" data-format="png">PNG</button>
           </div>
-          <p class="setting-note" id="formatNote">自动：默认保持原格式，压不到目标时才按 WebP → AVIF / JPEG 降级</p>
+          <p class="setting-note" id="formatNote">自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。</p>
         </div>
       </div>
 
@@ -104,6 +104,6 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
