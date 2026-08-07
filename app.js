@@ -50,7 +50,7 @@ const I18N = {
     feedback: '提交反馈',
     dropAria: '上传图片',
     dropTitle: '点击选择图片，拖拽或粘贴上传',
-    dropHint: '支持 JPG / PNG / WebP / AVIF / GIF，可一次选择多张',
+    dropHint: '支持 JPG / PNG / WebP / AVIF / GIF / HEIC，可一次选择多张',
     targetLabel: '目标大小',
     convertOnly: '仅转换',
     customPh: '自定义 KB',
@@ -103,7 +103,7 @@ const I18N = {
     feedback: 'Feedback',
     dropAria: 'Upload images',
     dropTitle: 'Click to select, drag & drop, or paste',
-    dropHint: 'JPG / PNG / WebP / AVIF / GIF, multiple files supported',
+    dropHint: 'JPG / PNG / WebP / AVIF / GIF / HEIC, multiple files supported',
     targetLabel: 'Target size',
     convertOnly: 'Convert only',
     customPh: 'Custom KB',
@@ -257,7 +257,7 @@ document.addEventListener('paste', (e) => {
   const items = e.clipboardData && e.clipboardData.items;
   if (!items) return;
   const imgs = [...items]
-    .filter((it) => it.type && it.type.startsWith('image/'))
+    .filter((it) => it.type && (it.type.startsWith('image/') || /heic|heif/i.test(it.type)))
     .map((it) => it.getAsFile())
     .filter(Boolean);
   if (!imgs.length) return;
@@ -266,7 +266,7 @@ document.addEventListener('paste', (e) => {
 });
 
 function handleFiles(files) {
-  const imgs = files.filter((f) => f.type.startsWith('image/'));
+  const imgs = files.filter((f) => f.type.startsWith('image/') || /heic|heif/i.test(f.type));
   if (!imgs.length) { toast(t('selectImages'), true); return; }
   state.files = state.files.concat(imgs);
   renderFileList();
@@ -502,8 +502,54 @@ downloadAllBtn.addEventListener('click', async () => {
  * 压缩核心
  * ===================================================================== */
 
-/** 解码为可绘制对象（ImageBitmap 优先，回退 Image） */
+/** HEIC/HEIF → PNG Blob（懒加载 heic2any WASM 解码器） */
+let heicLib = null;
+async function loadHeicLib() {
+  if (heicLib) return heicLib;
+  heicLib = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'heic2any.min.js';
+    script.onload = () => resolve(window.heic2any);
+    script.onerror = () => { heicLib = null; reject(new Error('HEIC 解码库加载失败')); };
+    document.head.appendChild(script);
+  });
+  return heicLib;
+}
+
+async function isHeic(file) {
+  const mime = (file.type || '').toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  return mime.includes('heic') || mime.includes('heif') ||
+    name.endsWith('.heic') || name.endsWith('.heif');
+}
+
+/** 解码为可绘制对象（HEIC 先转 PNG，其余走 ImageBitmap/Image） */
 async function decodeImage(file) {
+  if (await isHeic(file)) {
+    const heic2any = await loadHeicLib();
+    const out = await heic2any({
+      blob: file,
+      toType: 'image/png',
+      quality: 1,
+    });
+    const pngBlob = Array.isArray(out) ? out[0] : out;
+    try {
+      return await createImageBitmap(pngBlob);
+    } catch (_) {
+      const img = new Image();
+      const url = URL.createObjectURL(pngBlob);
+      try {
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('HEIC 解码失败'));
+          img.src = url;
+        });
+        return img;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+  }
   try {
     return await createImageBitmap(file);
   } catch (_) {
@@ -595,11 +641,13 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
   height = Math.max(1, Math.round(height * dimScale));
 
   // 原始格式（来自 MIME，兜底文件扩展名）
+  // HEIC/HEIF 在 decodeImage 阶段已转成 PNG 位图，此处按 PNG 语义处理
   let srcFmt = null;
   if (srcMime === 'image/jpeg' || srcMime === 'image/jpg') srcFmt = 'jpeg';
   else if (srcMime === 'image/png') srcFmt = 'png';
   else if (srcMime === 'image/webp') srcFmt = 'webp';
   else if (srcMime === 'image/avif') srcFmt = 'avif';
+  else if (srcMime.includes('heic') || srcMime.includes('heif')) srcFmt = 'png';
   if (!srcFmt) {
     const m = file.name.match(/\.([a-z0-9]+)$/i);
     if (m) {
@@ -608,11 +656,14 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
       else if (e === 'png') srcFmt = 'png';
       else if (e === 'webp') srcFmt = 'webp';
       else if (e === 'avif') srcFmt = 'avif';
+      else if (e === 'heic' || e === 'heif') srcFmt = 'png';
     }
   }
 
   // 自动模式：原图已达标 → 直接保留原文件（仅压缩模式；转换模式永远重编码）
-  if (!convertOnly && formatMode === 'auto' && file.size <= targetBytes) {
+  // 例外：HEIC/HEIF 不是通用格式，即使达标也要重编码为常见格式
+  const srcIsHeic = /heic|heif/i.test(srcMime) || /\.(heic|heif)$/i.test(file.name || '');
+  if (!convertOnly && formatMode === 'auto' && file.size <= targetBytes && !srcIsHeic) {
     const m = file.name.match(/\.([a-z0-9]+)$/i);
     return {
       blob: file, width: bitmap.width, height: bitmap.height,

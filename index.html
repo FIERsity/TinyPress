@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <header class="site-header">
@@ -41,7 +41,7 @@
   <main class="container">
     <!-- 上传区 -->
     <section class="card drop-card" id="dropzone" tabindex="0" role="button" data-i18n-aria="dropAria">
-      <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple hidden />
       <div class="drop-inner">
         <div class="drop-icon">
           <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -51,7 +51,7 @@
           </svg>
         </div>
         <p class="drop-title" data-i18n="dropTitle">点击选择图片，拖拽或粘贴上传</p>
-        <p class="drop-hint" data-i18n="dropHint">支持 JPG / PNG / WebP / AVIF / GIF，可一次选择多张</p>
+        <p class="drop-hint" data-i18n="dropHint">支持 JPG / PNG / WebP / AVIF / GIF / HEIC，可一次选择多张</p>
       </div>
     </section>
 
@@ -63,12 +63,12 @@
           <div class="preset-btns" id="presetBtns">
             <button type="button" class="preset" data-kb="200">200KB</button>
             <button type="button" class="preset" data-kb="500">500KB</button>
-            <button type="button" class="preset convert-preset" data-kb="-1" data-i18n="convertOnly">仅转换</button>
             <button type="button" class="preset active" data-kb="1024">1MB</button>
             <button type="button" class="preset" data-kb="2048">2MB</button>
             <button type="button" class="preset" data-kb="5120">5MB</button>
             <button type="button" class="preset" data-kb="10240">10MB</button>
             <button type="button" class="preset" data-kb="25600">25MB</button>
+            <button type="button" class="preset convert-preset" data-kb="-1" data-i18n="convertOnly">仅转换</button>
           </div>
           <div class="custom-size">
             <input type="number" id="customSize" min="10" max="102400" data-i18n-ph="customPh" placeholder="自定义 KB" />
@@ -130,6 +130,6 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
