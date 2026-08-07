@@ -195,9 +195,10 @@ body {
 /* ---------- Modal ---------- */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(31, 36, 48, 0.45);
-  display: flex; align-items: center; justify-content: center;
+  display: none; align-items: center; justify-content: center;
   z-index: 100; padding: 20px;
 }
+.modal-overlay.open { display: flex; }
 .modal {
   background: var(--card); border-radius: var(--radius); padding: 22px;
   width: 100%; max-width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);

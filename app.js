@@ -757,14 +757,14 @@ const feedbackText = document.getElementById('feedbackText');
 const feedbackCancel = document.getElementById('feedbackCancel');
 const feedbackSubmit = document.getElementById('feedbackSubmit');
 
-function openFeedback() { feedbackModal.hidden = false; feedbackText.value = ''; feedbackText.focus(); }
-function closeFeedback() { feedbackModal.hidden = true; }
+function openFeedback() { feedbackModal.classList.add('open'); feedbackText.value = ''; feedbackText.focus(); }
+function closeFeedback() { feedbackModal.classList.remove('open'); }
 
 feedbackBtn.addEventListener('click', openFeedback);
 feedbackCancel.addEventListener('click', closeFeedback);
 feedbackModal.addEventListener('click', (e) => { if (e.target === feedbackModal) closeFeedback(); });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !feedbackModal.hidden) closeFeedback();
+  if (e.key === 'Escape' && feedbackModal.classList.contains('open')) closeFeedback();
 });
 
 feedbackSubmit.addEventListener('click', async () => {
