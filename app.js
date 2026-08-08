@@ -48,7 +48,7 @@ const I18N = {
     privacy: '纯本地处理',
     langZh: '中', langEn: 'EN',
     customAria: '自定义目标大小',
-    feedback: '提交反馈',
+    feedback: '反馈',
     dropAria: '上传图片',
     dropTitle: '点击选择图片，拖拽或粘贴上传',
     dropHint: '支持 JPG / PNG / WebP / AVIF / GIF / HEIC，可一次选择多张',
@@ -831,8 +831,15 @@ const feedbackText = document.getElementById('feedbackText');
 const feedbackCancel = document.getElementById('feedbackCancel');
 const feedbackSubmit = document.getElementById('feedbackSubmit');
 
-function openFeedback() { feedbackModal.classList.add('open'); feedbackText.value = ''; feedbackText.focus(); }
-function closeFeedback() { feedbackModal.classList.remove('open'); }
+function openFeedback() {
+  feedbackModal.hidden = false;
+  feedbackModal.classList.add('open');
+  feedbackText.focus();
+}
+function closeFeedback() {
+  feedbackModal.classList.remove('open');
+  feedbackModal.hidden = true;
+}
 
 feedbackBtn.addEventListener('click', openFeedback);
 feedbackCancel.addEventListener('click', closeFeedback);
@@ -855,6 +862,7 @@ feedbackSubmit.addEventListener('click', async () => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
     toast(t('fbOk'));
+    feedbackText.value = '';
     closeFeedback();
   } catch (err) {
     console.error('反馈提交失败:', err);
