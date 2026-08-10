@@ -4,7 +4,7 @@
 
 纯前端图片压缩工具：上传图片，压缩到指定大小以下（100KB / 200KB / 500KB / 1MB / 自定义）。图片全程在浏览器本地处理，不会上传到服务器。
 
-在线使用：https://FIERsity.github.io/tinypress/
+在线使用：https://FIERsity.github.io/TinyPress/
 
 ## 功能
 
@@ -30,7 +30,7 @@ python3 -m http.server 8080
 1. 将仓库推送到 GitHub
 2. 仓库 Settings → Pages
 3. Source 选择 Deploy from a branch，Branch 选 `main`，目录 `/ (root)`
-4. 访问 https://FIERsity.github.io/tinypress/
+4. 访问 https://FIERsity.github.io/TinyPress/
 
 ## 工作原理
 
