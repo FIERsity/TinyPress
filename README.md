@@ -1,5 +1,7 @@
 # 图压 TinyPress
 
+<p><img src="icons/brandmark.svg" alt="TinyPress logo" width="72" /></p>
+
 纯前端图片压缩工具：上传图片，压缩到指定大小以下（100KB / 200KB / 500KB / 1MB / 自定义）。图片全程在浏览器本地处理，不会上传到服务器。
 
 在线使用：https://FIERsity.github.io/tinypress/
