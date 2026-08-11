@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=2" />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=20" />
 </head>
 <body>
   <header class="site-header">
@@ -97,8 +97,9 @@
       <div class="results-head">
         <h2 data-i18n="resultsTitle">压缩结果</h2>
         <div class="results-actions">
-          <button type="button" class="btn-ghost" id="downloadAll" disabled data-i18n="downloadAll">打包下载</button>
-          <button type="button" class="btn-ghost" id="clearAll" data-i18n="clearAll">清空</button>
+          <button type="button" class="btn-ghost" id="selectAll" disabled data-i18n="selectAll">全选</button>
+          <button type="button" class="btn-ghost btn-download-all" id="downloadAll" disabled data-i18n="downloadAll">打包下载</button>
+          <button type="button" class="btn-ghost btn-danger" id="deleteSelected" disabled data-i18n="deleteSelected">删除</button>
         </div>
       </div>
       <div class="result-grid" id="resultGrid"></div>
@@ -127,6 +128,6 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="compression-policy.js?v=1"></script>
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>

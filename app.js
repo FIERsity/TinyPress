@@ -50,6 +50,36 @@ function fmtPct(n) {
   return Math.max(0, Math.round(n * 100)) + '%';
 }
 
+function baseName(name) {
+  const stripped = String(name || '').replace(/\.[^.]+$/, '');
+  return stripped || String(name || 'image');
+}
+
+function formatName(value) {
+  const normalized = String(value || '').toLowerCase().replace(/^image\//, '');
+  const aliases = {
+    jpg: 'JPEG',
+    jpeg: 'JPEG',
+    jfif: 'JPEG',
+    tif: 'TIFF',
+    tiff: 'TIFF',
+    'svg+xml': 'SVG',
+    'vnd.microsoft.icon': 'ICO',
+  };
+  return aliases[normalized] || normalized.toUpperCase() || 'IMAGE';
+}
+
+function sourceFormatName(file) {
+  const knownExtensions = new Set([
+    'jpg', 'jpeg', 'jfif', 'png', 'webp', 'avif', 'gif',
+    'heic', 'heif', 'bmp', 'svg', 'tif', 'tiff', 'ico',
+  ]);
+  const match = String(file.name || '').match(/\.([a-z0-9]+)$/i);
+  const extension = match ? match[1].toLowerCase() : '';
+  if (knownExtensions.has(extension)) return formatName(extension);
+  return formatName(file.type);
+}
+
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -90,9 +120,16 @@ const I18N = {
     converting: '转换中…',
     resultsTitle: '压缩结果',
     convertResultsTitle: '转换结果',
+    mixedResultsTitle: '处理结果',
     downloadAll: '打包下载',
     packaging: '打包中…',
-    clearAll: '清空',
+    selectAll: '全选',
+    deselectAll: '取消全选',
+    deleteSelected: '删除',
+    deleteResult: '删除',
+    selectResult: '选择 {name} 的结果',
+    compareSlider: '对比 {name} 的压缩前后',
+    convertSlider: '对比 {name} 的转换前后',
     footer: '图压 TinyPress · 免费开源工具 · 图片仅在本地浏览器中处理，绝不上传',
     selectImages: '请选择图片文件',
     selected: '已选 {n} 张，共 {size}',
@@ -113,11 +150,11 @@ const I18N = {
     stateFailed: '失败', stateNoCompress: '无需压缩', stateConverted: '转换完成',
     stateDone: '压缩完成', stateOk: '已达标', stateBest: '尽力压缩',
     stateUnsupported: '（浏览器不支持 AVIF，已用 {ext}）',
-    origSize: '原始大小', afterSize: '压缩后', convertAfterSize: '转换后',
+    origSize: '压缩前', afterSize: '压缩后', convertAfterSize: '转换后',
     savedSpace: '节省空间', dims: '尺寸', quality: '编码质量',
     original: '原图', lossless: '无损',
     resizedWarn: '(已降分辨率)', convertedWarn: '(已转 {ext})',
-    downloadOrig: '下载原图', download: '下载 {ext}', downloading: '处理中…',
+    downloadOrig: '下载', download: '下载', downloading: '处理中…',
     canNotHandle: '无法处理',
     canNotReachTarget: '无法在最低尺寸内压缩到目标大小',
   },
@@ -143,11 +180,18 @@ const I18N = {
     compress: 'Compress',
     compressing: 'Compressing…',
     converting: 'Converting…',
-    resultsTitle: 'Results',
-    convertResultsTitle: 'Results',
-    downloadAll: 'Download all',
+    resultsTitle: 'Compression results',
+    convertResultsTitle: 'Conversion results',
+    mixedResultsTitle: 'Results',
+    downloadAll: 'Download ZIP',
     packaging: 'Packing…',
-    clearAll: 'Clear',
+    selectAll: 'Select all',
+    deselectAll: 'Deselect all',
+    deleteSelected: 'Delete',
+    deleteResult: 'Delete',
+    selectResult: 'Select the result for {name}',
+    compareSlider: 'Compare before and after compression for {name}',
+    convertSlider: 'Compare before and after conversion for {name}',
     footer: 'TinyPress · Free & open source · Images never leave your browser',
     selectImages: 'Please choose image files',
     selected: '{n} selected, {size} total',
@@ -168,11 +212,11 @@ const I18N = {
     stateFailed: 'Failed', stateNoCompress: 'No compression needed', stateConverted: 'Converted',
     stateDone: 'Done', stateOk: 'Done', stateBest: 'Best effort',
     stateUnsupported: ' (AVIF unsupported, used {ext})',
-    origSize: 'Original size', afterSize: 'After', convertAfterSize: 'After',
+    origSize: 'Before', afterSize: 'After', convertAfterSize: 'After',
     savedSpace: 'Saved', dims: 'Dimensions', quality: 'Encoding quality',
     original: 'Original', lossless: 'Lossless',
-    resizedWarn: ' (resized)', convertedWarn: ' (converted to {ext})',
-    downloadOrig: 'Download original', download: 'Download {ext}', downloading: 'Working…',
+    resizedWarn: '(resized)', convertedWarn: '(converted to {ext})',
+    downloadOrig: 'Download', download: 'Download', downloading: 'Working…',
     canNotHandle: 'Cannot process',
     canNotReachTarget: 'Cannot reach the target size at the minimum dimensions',
   },
@@ -198,6 +242,14 @@ function applyLang() {
   });
   langBtns.forEach((b) => b.classList.toggle('active', b.dataset.lang === lang));
   formatNote.textContent = t('fmt' + state.format.charAt(0).toUpperCase() + state.format.slice(1));
+  document.querySelectorAll('.cmp-range').forEach((range) => {
+    range.setAttribute('aria-label', t(range.dataset.i18n, { name: range.dataset.name }));
+  });
+  document.querySelectorAll('.result-select').forEach((button) => {
+    button.setAttribute('aria-label', t('selectResult', { name: button.dataset.name }));
+  });
+  doneResults.forEach(renderCompletedCardText);
+  updateResultActions();
   renderFileList();
 }
 langBtns.forEach((b) => {
@@ -352,13 +404,15 @@ function updateCompressBtn() {
 
 /* ---------------- 压缩按钮 ---------------- */
 const results = document.getElementById('results');
+const resultsTitle = results.querySelector('h2');
 const resultGrid = document.getElementById('resultGrid');
 
 compressBtn.addEventListener('click', async () => {
   if (!state.files.length || state.processing) return;
   state.processing = true;
   updateCompressBtn();
-  compressBtn.textContent = t(state.convertOnly ? 'converting' : 'compressing');
+  compressBtn.dataset.i18n = state.convertOnly ? 'converting' : 'compressing';
+  compressBtn.textContent = t(compressBtn.dataset.i18n);
 
   const files = state.files.slice();
   const runId = ++state.runId;
@@ -392,14 +446,74 @@ compressBtn.addEventListener('click', async () => {
   if (runId === state.runId) {
     state.processing = false;
     updateCompressBtn();
+    compressBtn.dataset.i18n = 'compress';
     compressBtn.textContent = t('compress');
     updateDownloadAllBtn();
   }
 });
 
 /* ---------------- 结果卡片 ---------------- */
-const doneResults = []; // {file, result} 用于打包下载
+const doneResults = []; // {file, result, card, selected} 用于选择、删除和打包下载
 const beforePreviewReady = new WeakMap();
+const selectAllBtn = document.getElementById('selectAll');
+const downloadAllBtn = document.getElementById('downloadAll');
+const deleteSelectedBtn = document.getElementById('deleteSelected');
+let packaging = false;
+
+function updateResultsTitle() {
+  const modes = new Set([...resultGrid.children].map((card) => card.dataset.resultMode));
+  const key = modes.size > 1
+    ? 'mixedResultsTitle'
+    : modes.has('convert')
+      ? 'convertResultsTitle'
+      : 'resultsTitle';
+  resultsTitle.dataset.i18n = key;
+  resultsTitle.textContent = t(key);
+}
+
+function entryForCard(card) {
+  return doneResults.find((entry) => entry.card === card);
+}
+
+function setEntrySelected(entry, selected) {
+  entry.selected = selected;
+  entry.card.classList.toggle('is-selected', selected);
+  const button = entry.card.querySelector('.result-select');
+  button.classList.toggle('selected', selected);
+  button.setAttribute('aria-pressed', String(selected));
+}
+
+function selectedResults() {
+  return doneResults.filter((entry) => entry.selected);
+}
+
+function updateResultActions() {
+  const selectedCount = selectedResults().length;
+  const canBulkAct = selectedCount >= 2 && !packaging;
+  const allSelected = doneResults.length >= 2 && doneResults.every((entry) => entry.selected);
+
+  selectAllBtn.disabled = doneResults.length < 2 || packaging;
+  selectAllBtn.textContent = t(allSelected ? 'deselectAll' : 'selectAll');
+  selectAllBtn.classList.toggle('is-deselect', allSelected);
+  selectAllBtn.classList.toggle('is-select', !allSelected);
+  downloadAllBtn.textContent = t(packaging ? 'packaging' : 'downloadAll');
+  downloadAllBtn.disabled = !canBulkAct;
+  deleteSelectedBtn.disabled = !canBulkAct;
+
+  doneResults.forEach((entry) => {
+    entry.card.querySelector('.result-select').disabled = packaging;
+    entry.card.querySelector('.btn-card-delete').disabled = packaging;
+  });
+}
+
+function removeResultCard(card) {
+  const index = doneResults.findIndex((entry) => entry.card === card);
+  if (index >= 0) doneResults.splice(index, 1);
+  card.remove();
+  updateResultsTitle();
+  if (!resultGrid.children.length) results.hidden = true;
+  updateResultActions();
+}
 
 function setBlobPreview(img, blob) {
   return new Promise((resolve) => {
@@ -461,51 +575,70 @@ async function ensureBeforePreview(card, bitmap, shouldCancel) {
 
 function createCard(file, job) {
   const card = document.createElement('div');
+  const displayName = baseName(file.name);
+  const inputFormat = sourceFormatName(file);
   card.className = 'result-card';
+  card.dataset.resultStatus = 'pending';
+  card.dataset.resultMode = job.convertOnly ? 'convert' : 'compress';
   card.innerHTML =
     '<div class="compare">' +
-      '<span class="cmp-label orig">' + t('origLabel') + '</span>' +
-      '<span class="cmp-label comp">' + t('compLabel') + '</span>' +
-      '<img class="cmp-before" alt="original" />' +
-      '<img class="cmp-after" alt="after" />' +
+      '<span class="cmp-label orig" data-i18n="origLabel">' + t('origLabel') + '</span>' +
+      '<span class="cmp-label comp" data-i18n="' + (job.convertOnly ? 'convertCompLabel' : 'compLabel') + '">' + t(job.convertOnly ? 'convertCompLabel' : 'compLabel') + '</span>' +
+      '<img class="cmp-before" alt="" />' +
+      '<img class="cmp-after" alt="" />' +
       '<div class="cmp-handle"></div>' +
-      '<input type="range" class="cmp-range" min="0" max="100" value="50" aria-label="compare slider" />' +
+      '<input type="range" class="cmp-range" min="0" max="100" value="50" />' +
+      '<button type="button" class="result-select" aria-label="' + escapeHtml(t('selectResult', { name: displayName })) + '" aria-pressed="false" disabled></button>' +
     '</div>' +
     '<div class="result-body">' +
-      '<div class="result-name"><span class="name">' + escapeHtml(file.name) + '</span><span class="state">' + t(job.convertOnly ? 'stateConverting' : 'stateCompressing') + '</span></div>' +
-      '<div class="stat-row"><span>' + t('origSize') + '</span><b>' + fmtBytes(file.size) + '</b></div>' +
-      '<div class="stat-row"><span>' + t(job.convertOnly ? 'convertAfterSize' : 'afterSize') + '</span><b class="size-out">…</b></div>' +
-      '<div class="stat-row"><span>' + t('savedSpace') + '</span><span class="saved">…</span></div>' +
-      '<div class="stat-row"><span>' + t('dims') + '</span><b class="dims">…</b></div>' +
-      '<div class="stat-row"><span>' + t('quality') + '</span><b class="quality">…</b></div>' +
-      '<button class="btn-download" disabled>' + t('downloading') + '</button>' +
+      '<div class="result-name"><span class="name">' + escapeHtml(displayName) + '</span><span class="state" data-i18n="' + (job.convertOnly ? 'stateConverting' : 'stateCompressing') + '">' + t(job.convertOnly ? 'stateConverting' : 'stateCompressing') + '</span></div>' +
+      '<div class="stat-row"><span data-i18n="origSize">' + t('origSize') + '</span><b>' + escapeHtml(inputFormat) + ' ' + fmtBytes(file.size) + '</b></div>' +
+      '<div class="stat-row"><span data-i18n="' + (job.convertOnly ? 'convertAfterSize' : 'afterSize') + '">' + t(job.convertOnly ? 'convertAfterSize' : 'afterSize') + '</span><b class="size-out">…</b></div>' +
+      '<div class="stat-row"><span data-i18n="savedSpace">' + t('savedSpace') + '</span><span class="saved">…</span></div>' +
+      '<div class="stat-row"><span data-i18n="dims">' + t('dims') + '</span><b class="dims">…</b></div>' +
+      '<div class="stat-row"><span data-i18n="quality">' + t('quality') + '</span><b class="quality">…</b></div>' +
+      '<p class="result-error" hidden></p>' +
+      '<div class="result-card-actions">' +
+        '<button type="button" class="btn-download" data-i18n="downloading" disabled>' + t('downloading') + '</button>' +
+        '<button type="button" class="btn-card-delete" data-i18n="deleteResult" disabled>' + t('deleteResult') + '</button>' +
+      '</div>' +
     '</div>';
   resultGrid.appendChild(card);
+  results.hidden = false;
+  updateResultsTitle();
 
   const beforeImg = card.querySelector('.cmp-before');
   beforePreviewReady.set(card, setBlobPreview(beforeImg, file));
   const range = card.querySelector('.cmp-range');
+  range.dataset.name = displayName;
+  range.dataset.i18n = job.convertOnly ? 'convertSlider' : 'compareSlider';
+  range.setAttribute('aria-label', t(range.dataset.i18n, { name: displayName }));
   const applyPos = () => card.querySelector('.compare').style.setProperty('--pos', range.value + '%');
   applyPos();
   range.addEventListener('input', applyPos);
+  const selectButton = card.querySelector('.result-select');
+  selectButton.dataset.name = displayName;
+  selectButton.addEventListener('click', () => {
+    const entry = entryForCard(card);
+    if (!entry || packaging) return;
+    setEntrySelected(entry, !entry.selected);
+    updateResultActions();
+  });
+  card.querySelector('.btn-card-delete').addEventListener('click', () => removeResultCard(card));
   return card;
 }
 
-function renderResult(card, file, r, job) {
-  doneResults.push({ file, result: r });
-  void setBlobPreview(card.querySelector('.cmp-after'), r.blob);
-  const nameEl = card.querySelector('.name');
+function renderCompletedCardText(entry) {
+  const { card, file, result: r, job } = entry;
   const stateEl = card.querySelector('.state');
   const sizeOut = card.querySelector('.size-out');
   const savedEl = card.querySelector('.saved');
   const dimsEl = card.querySelector('.dims');
   const qualityEl = card.querySelector('.quality');
   const btn = card.querySelector('.btn-download');
-
-  const base = file.name.replace(/\.[^.]+$/, '');
-  const ext = (r.ext || 'jpg').toLowerCase();
   const isConvert = job.convertOnly;
 
+  stateEl.removeAttribute('data-i18n');
   dimsEl.textContent = r.width + ' × ' + r.height;
   qualityEl.textContent = r.kept
     ? t('original')
@@ -516,18 +649,14 @@ function renderResult(card, file, r, job) {
   if (r.kept) {
     stateEl.textContent = isConvert ? t('stateConverted') : t('stateNoCompress');
     stateEl.className = 'state ok';
-    sizeOut.textContent = fmtBytes(r.blob.size);
     savedEl.textContent = '—';
-    btn.textContent = t('downloadOrig');
   } else if (isConvert) {
     stateEl.textContent = t('stateConverted');
     stateEl.className = 'state ok';
-    sizeOut.textContent = fmtBytes(r.blob.size);
     savedEl.textContent = '—';
     if (r.resized) {
       dimsEl.innerHTML = r.width + ' × ' + r.height + ' <span class="warn">' + t('resizedWarn') + '</span>';
     }
-    btn.textContent = t('download', { ext: ext.toUpperCase() });
   } else {
     const savedRatio = 1 - r.blob.size / file.size;
     const underTarget = r.blob.size <= job.targetBytes;
@@ -537,7 +666,6 @@ function renderResult(card, file, r, job) {
     if (job.formatMode === 'avif' && r.ext !== 'avif') {
       stateEl.textContent += t('stateUnsupported', { ext: r.ext.toUpperCase() });
     }
-    sizeOut.textContent = fmtBytes(r.blob.size);
     savedEl.textContent = savedRatio > 0 ? '−' + fmtPct(savedRatio) : '+0%';
     if (r.resized) {
       dimsEl.innerHTML = r.width + ' × ' + r.height + ' <span class="warn">' + t('resizedWarn') + '</span>';
@@ -550,34 +678,66 @@ function renderResult(card, file, r, job) {
     if (r.converted && !srcSame) {
       dimsEl.innerHTML += ' <span class="warn">' + t('convertedWarn', { ext: r.ext.toUpperCase() }) + '</span>';
     }
-    btn.textContent = t('download', { ext: ext.toUpperCase() });
   }
 
+  sizeOut.textContent = formatName(r.ext) + ' ' + fmtBytes(r.blob.size);
+  btn.dataset.i18n = r.kept ? 'downloadOrig' : 'download';
+  btn.textContent = t(btn.dataset.i18n);
+}
+
+function renderResult(card, file, r, job) {
+  const entry = { file, result: r, job, card, selected: false };
+  doneResults.push(entry);
+  card.dataset.resultStatus = 'done';
+  void setBlobPreview(card.querySelector('.cmp-after'), r.blob);
+  renderCompletedCardText(entry);
+
+  const btn = card.querySelector('.btn-download');
+  const deleteBtn = card.querySelector('.btn-card-delete');
+  const selectBtn = card.querySelector('.result-select');
+  const base = baseName(file.name);
+  const ext = (r.ext || 'jpg').toLowerCase();
+  const actionSuffix = job.convertOnly ? 'converted' : 'compressed';
+
   btn.disabled = false;
+  deleteBtn.disabled = false;
+  selectBtn.disabled = false;
+  updateResultActions();
   btn.onclick = () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(r.blob);
-    a.download = base + '_compressed.' + ext;
+    a.download = base + '_' + actionSuffix + '.' + ext;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
 }
 
 function renderError(card, file, err) {
+  card.dataset.resultStatus = 'error';
+  card.classList.add('has-error');
+  card.querySelector('.cmp-range').disabled = true;
+  card.querySelector('.state').dataset.i18n = 'stateFailed';
   card.querySelector('.state').textContent = t('stateFailed');
   card.querySelector('.state').className = 'state err';
   card.querySelector('.size-out').textContent = '—';
-  card.querySelector('.saved').textContent = err.message || String(err);
+  card.querySelector('.saved').textContent = '—';
+  card.querySelector('.dims').textContent = '—';
+  card.querySelector('.quality').textContent = '—';
+  const errorEl = card.querySelector('.result-error');
+  errorEl.textContent = err.message || String(err);
+  errorEl.hidden = false;
   const btn = card.querySelector('.btn-download');
+  const deleteBtn = card.querySelector('.btn-card-delete');
+  btn.dataset.i18n = 'canNotHandle';
   btn.textContent = t('canNotHandle');
   btn.disabled = true;
+  deleteBtn.disabled = false;
+  updateResultActions();
 }
 
 /* ---------------- 打包下载 ---------------- */
-const downloadAllBtn = document.getElementById('downloadAll');
-
 function updateDownloadAllBtn() {
-  downloadAllBtn.disabled = doneResults.length === 0;
+  updateResultActions();
 }
 
 let jszipPromise = null;
@@ -593,31 +753,54 @@ function loadJSZip() {
   return jszipPromise;
 }
 
+selectAllBtn.addEventListener('click', () => {
+  if (doneResults.length < 2 || packaging) return;
+  const shouldSelect = !doneResults.every((entry) => entry.selected);
+  doneResults.forEach((entry) => setEntrySelected(entry, shouldSelect));
+  updateResultActions();
+});
+
+deleteSelectedBtn.addEventListener('click', () => {
+  const selected = selectedResults();
+  if (selected.length < 2 || packaging) return;
+  selected.forEach((entry) => removeResultCard(entry.card));
+});
+
 downloadAllBtn.addEventListener('click', async () => {
-  if (!doneResults.length) return;
+  const selected = selectedResults();
+  if (selected.length < 2 || packaging) return;
   try {
-    downloadAllBtn.disabled = true;
-    downloadAllBtn.textContent = t('packaging');
+    packaging = true;
+    updateResultActions();
     const JSZip = await loadJSZip();
     const zip = new JSZip();
-    for (const { file, result } of doneResults) {
-      const base = file.name.replace(/\.[^.]+$/, '');
+    const usedNames = new Set();
+    for (const { file, result, job } of selected) {
+      const base = baseName(file.name);
       const ext = (result.ext || 'jpg').toLowerCase();
-      zip.file(base + '_compressed.' + ext, result.blob);
+      const actionSuffix = job.convertOnly ? 'converted' : 'compressed';
+      let name = base + '_' + actionSuffix + '.' + ext;
+      let suffix = 2;
+      while (usedNames.has(name.toLowerCase())) {
+        name = base + '_' + actionSuffix + '_' + suffix + '.' + ext;
+        suffix++;
+      }
+      usedNames.add(name.toLowerCase());
+      zip.file(name, result.blob);
     }
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'tinypress-' + doneResults.length + '张.zip';
+    a.download = 'tinypress-' + selected.length + '.zip';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast(t('zipDone', { n: doneResults.length }));
+    toast(t('zipDone', { n: selected.length }));
   } catch (err) {
     console.error('打包失败:', err);
     toast(err.message || t('zipFailGen'), true);
   } finally {
-    downloadAllBtn.textContent = t('downloadAll');
-    updateDownloadAllBtn();
+    packaging = false;
+    updateResultActions();
   }
 });
 
@@ -940,18 +1123,6 @@ feedbackSubmit.addEventListener('click', async () => {
 
 // 初始化语言（依赖 DOM 元素，放最后）
 applyLang();
-
-/* ---------------- 清空 ---------------- */
-document.getElementById('clearAll').addEventListener('click', () => {
-  state.runId++;
-  state.processing = false;
-  compressBtn.textContent = t('compress');
-  resultGrid.innerHTML = '';
-  results.hidden = true;
-  doneResults.length = 0;
-  updateCompressBtn();
-  updateDownloadAllBtn();
-});
 
 /* ---------------- PWA: 注册 Service Worker ---------------- */
 if ('serviceWorker' in navigator) {
