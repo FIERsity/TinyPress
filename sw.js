@@ -2,7 +2,7 @@
  * 策略：网络优先（始终请求最新内容，在线时绝不使用旧缓存），
  *       离线时回退到已缓存的应用外壳。
  */
-const CACHE = 'tinypress-v1';
+const CACHE = 'tinypress-v2';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

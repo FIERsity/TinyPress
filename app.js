@@ -9,11 +9,24 @@
 /* ---------------- 状态 ---------------- */
 const state = {
   targetBytes: 1024 * 1024, // 默认 1MB（GitHub 头像等常见门槛）
-  format: 'auto',          // auto | jpeg | webp | png
+  format: 'auto',          // auto | jpeg | webp | avif | png
   convertOnly: false,      // true = 仅格式转换，不压体积
   files: [],               // 待压缩文件
   processing: false,
 };
+
+const compressionPolicy = window.TinyPressCompressionPolicy;
+if (!compressionPolicy) throw new Error('压缩策略加载失败');
+const {
+  RANGE_RATIO,
+  buildAutoCandidates,
+  compressLossless: runLosslessCompression,
+  compressLossy: runLossyCompression,
+  fitWithinCanvasBudget,
+  isSupportedImageFile,
+  pickPreferredResult,
+  sourceExtensionForFile,
+} = compressionPolicy;
 
 /* ---------------- 工具函数 ---------------- */
 function fmtBytes(n) {
@@ -56,11 +69,11 @@ const I18N = {
     convertOnly: '仅转换',
     customPh: '自定义',
     formatLabel: '输出格式',
-    fmtAuto: '自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。',
+    fmtAuto: '自动：优先保留分辨率和画质；HEIF 会转换为 AVIF / WebP / JPEG。',
     fmtJpeg: 'JPEG：照片类最合适，透明区域会填充白色',
     fmtWebp: 'WebP：体积小、支持透明',
     fmtAvif: 'AVIF：当前压缩率最好的格式，浏览器不支持时自动回退',
-    fmtPng: 'PNG：无损格式，只缩小分辨率不损失画质',
+    fmtPng: 'PNG：无损但文件通常较大；达到目标大小时只降低分辨率',
     compress: '压缩',
     compressing: '压缩中…',
     converting: '转换中…',
@@ -90,11 +103,12 @@ const I18N = {
     stateDone: '压缩完成', stateOk: '已达标', stateBest: '尽力压缩',
     stateUnsupported: '（浏览器不支持 AVIF，已用 {ext}）',
     origSize: '原始大小', afterSize: '压缩后', convertAfterSize: '转换后',
-    savedSpace: '节省空间', dims: '尺寸', quality: '质量',
+    savedSpace: '节省空间', dims: '尺寸', quality: '编码质量',
     original: '原图', lossless: '无损',
     resizedWarn: '(已降分辨率)', convertedWarn: '(已转 {ext})',
     downloadOrig: '下载原图', download: '下载 {ext}', downloading: '处理中…',
     canNotHandle: '无法处理',
+    canNotReachTarget: '无法在最低尺寸内压缩到目标大小',
   },
   en: {
     pageTitle: 'TinyPress · Compress images to a target size',
@@ -110,11 +124,11 @@ const I18N = {
     convertOnly: 'Convert only',
     customPh: 'Custom',
     formatLabel: 'Output format',
-    fmtAuto: 'Auto: keeps the original format; falls back to WebP → AVIF / JPEG only when needed.',
+    fmtAuto: 'Auto: prioritizes resolution and visual quality; HEIF is converted to AVIF, WebP, or JPEG.',
     fmtJpeg: 'JPEG: best for photos; transparent areas become white',
     fmtWebp: 'WebP: small size, supports transparency',
     fmtAvif: 'AVIF: best compression ratio; falls back automatically if unsupported',
-    fmtPng: 'PNG: lossless; only resolution is reduced',
+    fmtPng: 'PNG: lossless but often large; only resolution is reduced to meet the target',
     compress: 'Compress',
     compressing: 'Compressing…',
     converting: 'Converting…',
@@ -144,11 +158,12 @@ const I18N = {
     stateDone: 'Done', stateOk: 'Done', stateBest: 'Best effort',
     stateUnsupported: ' (AVIF unsupported, used {ext})',
     origSize: 'Original size', afterSize: 'After', convertAfterSize: 'After',
-    savedSpace: 'Saved', dims: 'Dimensions', quality: 'Quality',
+    savedSpace: 'Saved', dims: 'Dimensions', quality: 'Encoding quality',
     original: 'Original', lossless: 'Lossless',
     resizedWarn: ' (resized)', convertedWarn: ' (converted to {ext})',
     downloadOrig: 'Download original', download: 'Download {ext}', downloading: 'Working…',
     canNotHandle: 'Cannot process',
+    canNotReachTarget: 'Cannot reach the target size at the minimum dimensions',
   },
 };
 let lang = 'zh';
@@ -280,16 +295,15 @@ document.addEventListener('paste', (e) => {
   const items = e.clipboardData && e.clipboardData.items;
   if (!items) return;
   const imgs = [...items]
-    .filter((it) => it.type && (it.type.startsWith('image/') || /heic|heif/i.test(it.type)))
     .map((it) => it.getAsFile())
-    .filter(Boolean);
+    .filter((file) => file && isSupportedImageFile(file));
   if (!imgs.length) return;
   e.preventDefault();
   handleFiles(imgs);
 });
 
 function handleFiles(files) {
-  const imgs = files.filter((f) => f.type.startsWith('image/') || /heic|heif/i.test(f.type));
+  const imgs = files.filter(isSupportedImageFile);
   if (!imgs.length) { toast(t('selectImages'), true); return; }
   state.files = state.files.concat(imgs);
   renderFileList();
@@ -336,18 +350,20 @@ compressBtn.addEventListener('click', async () => {
   compressBtn.textContent = t(state.convertOnly ? 'converting' : 'compressing');
 
   const files = state.files.slice();
-  const target = state.targetBytes;
-  const format = state.format;
-  const convertOnly = state.convertOnly;
+  const job = Object.freeze({
+    targetBytes: state.targetBytes,
+    formatMode: state.format,
+    convertOnly: state.convertOnly,
+  });
   state.files = [];
   renderFileList();
 
   results.hidden = false;
   for (const file of files) {
-    const card = createCard(file);
+    const card = createCard(file, job);
     try {
-      const r = await compressFile(file, target, format, convertOnly);
-      renderResult(card, file, r);
+      const r = await compressFile(file, job);
+      renderResult(card, file, r, job);
     } catch (err) {
       console.error('压缩失败:', file.name, err);
       renderError(card, file, err);
@@ -363,7 +379,7 @@ compressBtn.addEventListener('click', async () => {
 /* ---------------- 结果卡片 ---------------- */
 const doneResults = []; // {file, result} 用于打包下载
 
-function createCard(file) {
+function createCard(file, job) {
   const card = document.createElement('div');
   card.className = 'result-card';
   card.innerHTML =
@@ -376,9 +392,9 @@ function createCard(file) {
       '<input type="range" class="cmp-range" min="0" max="100" value="50" aria-label="compare slider" />' +
     '</div>' +
     '<div class="result-body">' +
-      '<div class="result-name"><span class="name">' + escapeHtml(file.name) + '</span><span class="state">' + t(state.convertOnly ? 'stateConverting' : 'stateCompressing') + '</span></div>' +
+      '<div class="result-name"><span class="name">' + escapeHtml(file.name) + '</span><span class="state">' + t(job.convertOnly ? 'stateConverting' : 'stateCompressing') + '</span></div>' +
       '<div class="stat-row"><span>' + t('origSize') + '</span><b>' + fmtBytes(file.size) + '</b></div>' +
-      '<div class="stat-row"><span>' + t(state.convertOnly ? 'convertAfterSize' : 'afterSize') + '</span><b class="size-out">…</b></div>' +
+      '<div class="stat-row"><span>' + t(job.convertOnly ? 'convertAfterSize' : 'afterSize') + '</span><b class="size-out">…</b></div>' +
       '<div class="stat-row"><span>' + t('savedSpace') + '</span><span class="saved">…</span></div>' +
       '<div class="stat-row"><span>' + t('dims') + '</span><b class="dims">…</b></div>' +
       '<div class="stat-row"><span>' + t('quality') + '</span><b class="quality">…</b></div>' +
@@ -395,7 +411,7 @@ function createCard(file) {
   return card;
 }
 
-function renderResult(card, file, r) {
+function renderResult(card, file, r, job) {
   doneResults.push({ file, result: r });
   card.querySelector('.cmp-after').src = URL.createObjectURL(r.blob);
   const nameEl = card.querySelector('.name');
@@ -408,10 +424,14 @@ function renderResult(card, file, r) {
 
   const base = file.name.replace(/\.[^.]+$/, '');
   const ext = (r.ext || 'jpg').toLowerCase();
-  const isConvert = state.convertOnly;
+  const isConvert = job.convertOnly;
 
   dimsEl.textContent = r.width + ' × ' + r.height;
-  qualityEl.textContent = r.kept ? t('original') : r.quality === 1 ? t('lossless') : Math.round(r.quality * 100) + '%';
+  qualityEl.textContent = r.kept
+    ? t('original')
+    : r.ext === 'png'
+      ? t('lossless')
+      : Math.round(r.quality * 100) + '%';
 
   if (r.kept) {
     stateEl.textContent = isConvert ? t('stateConverted') : t('stateNoCompress');
@@ -430,11 +450,11 @@ function renderResult(card, file, r) {
     btn.textContent = t('download', { ext: ext.toUpperCase() });
   } else {
     const savedRatio = 1 - r.blob.size / file.size;
-    const underTarget = r.blob.size <= state.targetBytes;
-    const inRange = r.blob.size >= state.targetBytes * (1 - RANGE_RATIO);
+    const underTarget = r.blob.size <= job.targetBytes;
+    const inRange = r.blob.size >= job.targetBytes * (1 - RANGE_RATIO);
     stateEl.textContent = inRange ? t('stateDone') : (underTarget ? t('stateOk') : t('stateBest'));
     stateEl.className = 'state ' + (underTarget ? 'ok' : 'err');
-    if (state.format === 'avif' && r.ext !== 'avif') {
+    if (job.formatMode === 'avif' && r.ext !== 'avif') {
       stateEl.textContent += t('stateUnsupported', { ext: r.ext.toUpperCase() });
     }
     sizeOut.textContent = fmtBytes(r.blob.size);
@@ -516,7 +536,7 @@ downloadAllBtn.addEventListener('click', async () => {
     console.error('打包失败:', err);
     toast(err.message || t('zipFailGen'), true);
   } finally {
-    downloadAllBtn.textContent = '打包下载';
+    downloadAllBtn.textContent = t('downloadAll');
     updateDownloadAllBtn();
   }
 });
@@ -591,63 +611,33 @@ async function decodeImage(file) {
   }
 }
 
-/** 检测是否含透明像素（降采样 64×64 判断） */
+/** 精确检测透明像素。分块读取，避免为大图额外分配整幅 RGBA 缓冲区。 */
 function detectAlpha(bitmap) {
-  const w = Math.min(bitmap.width || 1, 64);
-  const h = Math.min(bitmap.height || 1, 64);
+  const TILE_SIZE = 512;
   const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  const data = ctx.getImageData(0, 0, w, h).data;
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] < 250) return true;
+  if (!ctx) return true;
+
+  for (let y = 0; y < bitmap.height; y += TILE_SIZE) {
+    for (let x = 0; x < bitmap.width; x += TILE_SIZE) {
+      const width = Math.min(TILE_SIZE, bitmap.width - x);
+      const height = Math.min(TILE_SIZE, bitmap.height - y);
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(bitmap, x, y, width, height, 0, 0, width, height);
+      const data = ctx.getImageData(0, 0, width, height).data;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] < 255) return true;
+      }
+    }
   }
   return false;
 }
 
-/**
- * 二分搜索质量。
- * - 目标区间 [minBytes, targetBytes]，minBytes = targetBytes * (1 - RANGE_RATIO)
- * - 优先返回「不超上限、且尽可能接近上限」的质量（落在区间内）
- * - 若没有任何质量落在区间内，返回不超上限的最高质量（尽力而为）
- * - maxQ < 1 时步进按 maxQ 自适应（避免 0.02 固定步进在低位区间失效）
- */
-const RANGE_RATIO = 0.15; // 区间宽度：目标值的 ±15% 以内视为达标
-const QUALITY_STEP = 0.02;
-
-async function searchQuality(w, h, encode, targetBytes, maxQ = 1) {
-  let lo = 0.04, hi = Math.max(0.04, maxQ);
-  let best = null;      // 不超上限的最高质量
-  let inRange = null;   // 落在区间内的最高质量
-  let overMin = null;   // 最低质量下的实测（即使超目标，用于估算下一档分辨率）
-  const minBytes = targetBytes * (1 - RANGE_RATIO);
-  const step = Math.max(0.001, Math.min(QUALITY_STEP, (hi - lo) / 8));
-  for (let i = 0; i < 12; i++) {
-    const mid = (lo + hi) / 2;
-    const blob = await encode(w, h, mid);
-    const entry = { blob, width: w, height: h, quality: mid, size: blob.size };
-    if (!overMin || mid < overMin.quality) overMin = entry;
-    if (blob.size <= targetBytes) {
-      best = entry;
-      if (blob.size >= minBytes) inRange = entry;
-      lo = mid + step;
-    } else {
-      hi = mid - step;
-    }
-  }
-  return inRange || best || overMin;
-}
-
-/**
- * 压缩单个文件到目标大小以下。
- * - auto：优先保留原格式；压不到目标区间才按通用度降级（原格式 → WebP → AVIF / JPEG）
- * - 显式格式：强制输出所选格式（AVIF 不支持时回退 WebP）
- * - 有损压缩：先原尺寸压质量；质量到底仍超目标 → 按体积比例估算下一档分辨率（收敛快、不盲目缩小）
- * 所有返回路径均携带 ext，并标记 converted（发生过格式转换）。
- */
-async function compressFile(file, targetBytes, formatMode, convertOnly = false) {
+/** 压缩单个文件到目标大小以下。格式决策与搜索策略来自可测试的共享策略。 */
+async function compressFile(file, job) {
+  const { targetBytes, formatMode, convertOnly } = job;
   const bitmap = await decodeImage(file);
   const srcMime = (file.type || '').toLowerCase();
 
@@ -655,22 +645,17 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
   const supportsAvif = typeof HTMLCanvasElement !== 'undefined' &&
     document.createElement('canvas').toDataURL('image/avif').startsWith('data:image/avif');
 
-  // 尺寸上限保护（超大图先归一化，避免 Canvas 内存溢出）
-  const MAX_DIM = 4096;
-  let width = bitmap.width, height = bitmap.height;
-  const dimScale = Math.min(1, MAX_DIM / Math.max(width, height));
-  const maxDimResized = dimScale < 1;
-  width = Math.max(1, Math.round(width * dimScale));
-  height = Math.max(1, Math.round(height * dimScale));
+  // 总像素预算只保护极端大图；常见 48MP 照片不再无条件缩到 4096px。
+  const [width, height] = fitWithinCanvasBudget(bitmap.width, bitmap.height);
+  const maxDimResized = width !== bitmap.width || height !== bitmap.height;
 
-  // 原始格式（来自 MIME，兜底文件扩展名）
-  // HEIC/HEIF 在 decodeImage 阶段已转成 PNG 位图，此处按 PNG 语义处理
+  // 原始格式来自 MIME，兜底文件扩展名。HEIF 的 PNG 只是解码中间格式，
+  // 不能据此把照片当成 PNG 源图，否则自动模式会为保无损而过度降分辨率。
   let srcFmt = null;
   if (srcMime === 'image/jpeg' || srcMime === 'image/jpg') srcFmt = 'jpeg';
   else if (srcMime === 'image/png') srcFmt = 'png';
   else if (srcMime === 'image/webp') srcFmt = 'webp';
   else if (srcMime === 'image/avif') srcFmt = 'avif';
-  else if (srcMime.includes('heic') || srcMime.includes('heif')) srcFmt = 'png';
   if (!srcFmt) {
     const m = file.name.match(/\.([a-z0-9]+)$/i);
     if (m) {
@@ -679,7 +664,6 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
       else if (e === 'png') srcFmt = 'png';
       else if (e === 'webp') srcFmt = 'webp';
       else if (e === 'avif') srcFmt = 'avif';
-      else if (e === 'heic' || e === 'heif') srcFmt = 'png';
     }
   }
 
@@ -687,14 +671,13 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
   // 例外：HEIC/HEIF 不是通用格式，即使达标也要重编码为常见格式
   const srcIsHeic = /heic|heif/i.test(srcMime) || /\.(heic|heif)$/i.test(file.name || '');
   if (!convertOnly && formatMode === 'auto' && file.size <= targetBytes && !srcIsHeic) {
-    const m = file.name.match(/\.([a-z0-9]+)$/i);
     return {
       blob: file, width: bitmap.width, height: bitmap.height,
-      ext: m ? m[1].toLowerCase() : 'jpg', quality: 1, kept: true,
+      ext: sourceExtensionForFile(file, srcFmt), quality: 1, kept: true,
     };
   }
 
-  // 候选格式（有序）：auto = 原格式 → WebP → AVIF/JPEG
+  // 候选格式：普通图片从原格式开始；HEIF 优先高效率有损格式。
   const fmtMap = {
     jpeg: ['image/jpeg', 'jpg'],
     webp: ['image/webp', 'webp'],
@@ -704,11 +687,12 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
   let candidates = [];
   if (formatMode === 'auto') {
     const hasAlpha = detectAlpha(bitmap);
-    if (srcFmt) candidates.push(srcFmt);
-    if (srcFmt !== 'webp') candidates.push('webp');
-    if (supportsAvif && srcFmt !== 'avif') candidates.push('avif');
-    // 不透明图再加 JPEG 作为最后兜底（PNG/WebP 已覆盖透明场景）
-    if (!hasAlpha && srcFmt !== 'jpeg' && srcFmt !== 'webp' && srcFmt !== 'avif') candidates.push('jpeg');
+    candidates = buildAutoCandidates({
+      srcFormat: srcFmt,
+      isHeif: srcIsHeic,
+      hasAlpha,
+      supportsAvif,
+    });
   } else if (formatMode === 'avif') {
     // 显式 AVIF：不支持时明确回退 WebP
     candidates = [supportsAvif ? 'avif' : 'webp'];
@@ -716,112 +700,80 @@ async function compressFile(file, targetBytes, formatMode, convertOnly = false) 
     candidates = [formatMode];
   }
 
-  // 仅格式转换：不压缩体积，原分辨率按目标格式全质量重编码
+  const makeEncode = (fmt) => {
+    const mime = fmtMap[fmt][0];
+    const fillWhite = mime === 'image/jpeg';
+    return (w, h, quality) => new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('无法创建图片画布'));
+        return;
+      }
+      if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('浏览器无法编码该图片格式'));
+          return;
+        }
+        if (blob.type !== mime) {
+          reject(new Error('浏览器不支持 ' + fmt.toUpperCase() + ' 编码'));
+          return;
+        }
+        resolve(blob);
+      }, mime, fmt === 'png' ? undefined : quality);
+    });
+  };
+
+  // 仅格式转换：不限制体积，按目标格式全质量重编码。
   if (convertOnly) {
     const [fmt] = candidates;
-    const [mime, ext] = fmtMap[fmt];
-    const fillWhite = mime === 'image/jpeg';
-    const blob = await new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); }
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(bitmap, 0, 0, width, height);
-      canvas.toBlob((res) => resolve(res), mime, fmt === 'png' ? undefined : 1);
-    });
+    const [, ext] = fmtMap[fmt];
+    const blob = await makeEncode(fmt)(width, height, 1);
     return {
-      blob, width, height, ext, quality: 1,
+      blob, size: blob.size, width, height, ext, quality: 1,
       resized: maxDimResized,
       converted: fmt !== srcFmt,
       convertOnly: true,
     };
   }
 
-  // 编码器
-  const makeEncode = (fmt) => {
-    const mime = fmtMap[fmt][0];
-    const fillWhite = mime === 'image/jpeg';
-    return (w, h, quality) => new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(bitmap, 0, 0, w, h);
-      canvas.toBlob((blob) => resolve(blob), mime, fmt === 'png' ? undefined : quality);
-    });
-  };
-
-  // 按实测体积比例估算下一档分辨率：
-  // 体积 ∝ 面积（边长平方），边长比例 = sqrt(当前体积 / 目标体积)。
-  // 始终用二分搜索的实测体积，比固定 0.8 步进收敛更快，也不会过度缩小。
-  function nextDim(w, h, measuredSize) {
-    const ratio = Math.sqrt(Math.max(measuredSize, 1) / targetBytes);
-    const scale = Math.max(0.4, Math.min(0.92, ratio));
-    const MIN_DIM = 16;
-    return [
-      Math.max(MIN_DIM, Math.round(w * scale)),
-      Math.max(MIN_DIM, Math.round(h * scale)),
-    ];
-  }
-
-  // 无损 PNG：只缩小分辨率
-  async function compressLossless(fmt, ext) {
-    const encode = makeEncode('png');
-    let w = width, h = height;
-    for (let i = 0; i < 40; i++) {
-      const blob = await encode(w, h, 1);
-      if (blob.size <= targetBytes) {
-        return { blob, width: w, height: h, quality: 1, ext, resized: maxDimResized || w < bitmap.width, converted: fmt !== srcFmt };
-      }
-      [w, h] = nextDim(w, h, blob.size);
-      if (w <= 16 || h <= 16) break;
-    }
-    const blob = await encode(w, h, 1);
-    return { blob, width: w, height: h, quality: 1, ext, resized: true, converted: fmt !== srcFmt };
-  }
-
-  // 有损 JPEG/WebP/AVIF：原尺寸压质量；质量到底 → 按体积比例跳档缩小分辨率
-  async function compressLossy(fmt, ext) {
-    const encode = makeEncode(fmt);
-    let best = null;      // 不超上限中体积最小的结果
-    let w = width, h = height;
-
-    for (let i = 0; i < 30; i++) {
-      const r = await searchQuality(w, h, encode, targetBytes, 1);
-      const meta = { ...r, ext, resized: maxDimResized || w < bitmap.width, converted: fmt !== srcFmt };
-      if (r.blob.size <= targetBytes && (!best || r.blob.size < best.blob.size)) best = meta;
-      if (r.blob.size >= targetBytes * (1 - RANGE_RATIO) && r.blob.size <= targetBytes) return meta;
-      if (w <= 16 || h <= 16) break;
-      // 始终用实测体积估算下一档（即使当前略超目标，也比线性模型准）
-      [w, h] = nextDim(w, h, r.blob.size);
-    }
-
-    if (best) return best;
-    const blob = await encode(w, h, 0.04);
-    return { blob, width: w, height: h, quality: 0.04, ext, resized: true, converted: fmt !== srcFmt };
-  }
-
-  // 依次尝试候选格式，保留全局最优与全局落在区间内的结果
-  let globalBest = null, globalFeasible = null;
-  for (const fmt of candidates) {
-    const [mime] = fmtMap[fmt];
+  // 比较候选时先保目标上限，再保分辨率和相对质量，不再偏爱更小文件。
+  let preferred = null;
+  for (let formatRank = 0; formatRank < candidates.length; formatRank++) {
+    const fmt = candidates[formatRank];
     const ext = fmtMap[fmt][1];
     let r;
-    if (fmt === 'png') r = await compressLossless(fmt, ext);
-    else r = await compressLossy(fmt, ext);
-    if (!globalBest || r.size < globalBest.size || (r.size === globalBest.size && r.quality > globalBest.quality)) {
-      globalBest = r;
+    try {
+      r = fmt === 'png'
+        ? await runLosslessCompression({ width, height, targetBytes, encode: makeEncode(fmt) })
+        : await runLossyCompression({ format: fmt, width, height, targetBytes, encode: makeEncode(fmt) });
+    } catch (err) {
+      if (formatMode !== 'auto') throw err;
+      console.warn('跳过不支持的编码格式:', fmt, err);
+      continue;
     }
-    if (r.size >= targetBytes * (1 - RANGE_RATIO) && r.size <= targetBytes) {
-      if (!globalFeasible || r.size > globalFeasible.size) globalFeasible = r;
-      if (fmt === candidates[0]) return r; // 首选格式已达标 → 立即返回
-    }
+    if (!r) continue;
+
+    const candidate = {
+      ...r,
+      format: fmt,
+      formatRank,
+      ext,
+      resized: maxDimResized || r.width < bitmap.width || r.height < bitmap.height,
+      converted: fmt !== srcFmt,
+    };
+    preferred = pickPreferredResult(preferred, candidate, targetBytes);
   }
-  return globalFeasible || globalBest;
+
+  if (!preferred || preferred.size > targetBytes) {
+    throw new Error(t('canNotReachTarget'));
+  }
+  return preferred;
 }
 
 /* ---------------- 提交反馈 ---------------- */

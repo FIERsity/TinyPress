@@ -80,7 +80,7 @@
             <button type="button" class="preset" data-format="avif">AVIF</button>
             <button type="button" class="preset" data-format="png">PNG</button>
           </div>
-          <p class="setting-note" id="formatNote" data-i18n="fmtAuto">自动：默认保持原格式，无法处理会按照 WebP → AVIF / JPEG 降级。</p>
+          <p class="setting-note" id="formatNote" data-i18n="fmtAuto">自动：优先保留分辨率和画质；HEIF 会转换为 AVIF / WebP / JPEG。</p>
         </div>
       </div>
 
@@ -115,7 +115,7 @@
   <div class="modal-overlay" id="feedbackModal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
       <h3 id="feedbackTitle" data-i18n="fbTitle">提交反馈</h3>
-      <p class="modal-hint" data-i18n="fbHint">反馈将以公开 Issue 发布到 GitHub，请勿填写敏感信息。</p>
+      <p class="modal-hint" data-i18n="fbHint">反馈会直接发送给开发者，请勿填写敏感信息。</p>
       <textarea id="feedbackText" rows="4" maxlength="2000" data-i18n-ph="fbPlaceholder" placeholder="遇到了什么问题？或有什么建议？"></textarea>
       <div class="modal-actions">
         <button type="button" class="btn-ghost" id="feedbackCancel" data-i18n="fbCancel">取消</button>
@@ -126,6 +126,7 @@
 
   <div class="toast" id="toast" role="status"></div>
 
-  <script src="app.js?v=19"></script>
+  <script src="compression-policy.js?v=1"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

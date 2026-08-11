@@ -33,11 +33,12 @@ TinyPress 没有 `package.json`、构建器或前端框架：
 
 - `index.html`：页面结构和资源入口。
 - `styles.css`：界面样式与响应式规则。
-- `app.js`：图片解码、Canvas 编码、压缩算法、下载和交互。
+- `app.js`：图片解码、Canvas 编码、下载和交互。
+- `compression-policy.js`：浏览器生产代码与 Node 测试共用的质量搜索、缩放、格式候选和结果排序策略。
 - `manifest.webmanifest`、`sw.js`：PWA 和离线缓存。
 - `icons/`：品牌与 PWA 图标。
 - `jszip.min.js`、`heic2any.min.js`：同源懒加载的 vendored 依赖，不手工编辑。
-- `test/algo.test.mjs`：压缩算法的随机化模型测试，不直接导入生产实现。
+- `test/algo.test.mjs`：直接导入生产压缩策略的确定性单元测试。
 - `worker/`：独立部署的 Cloudflare 反馈 Worker。
 
 `.wrangler/` 和 `worker/.wrangler/` 是本地生成状态，不得提交。
@@ -48,7 +49,7 @@ TinyPress 没有 `package.json`、构建器或前端框架：
 - 算法测试：`node test/algo.test.mjs`
 - 无构建、lint、类型检查或格式化命令。
 
-Canvas、HEIC/AVIF、下载、PWA、service worker 或 UI 改动不能只依赖模型测试，需要通过 HTTP 服务做桌面浏览器检查。随机模型测试失败时先判断是否为随机性或模型与生产实现不一致。
+Canvas、HEIC/AVIF、下载、PWA、service worker 或 UI 改动不能只依赖策略测试，需要通过 HTTP 服务做桌面浏览器检查。
 
 ### 发布
 
@@ -66,7 +67,9 @@ Canvas、HEIC/AVIF、下载、PWA、service worker 或 UI 改动不能只依赖�
 - 自动模式下，已经小于目标且无需转换的非 HEIC 文件应保持原字节。
 - 输出不得超过用户目标大小；低于目标时优先保留质量和分辨率，而不是追求更小文件。
 - 透明图片不得被不透明 JPEG 路径意外破坏。
-- PNG 走无损编码与必要的尺寸调整；有损格式使用质量搜索并在必要时缩放。
+- PNG 走无损编码与必要的尺寸调整；有损格式先保留可接受画质，只有质量下限仍超目标时才缩放。
+- 超过 8192px 长边或 6400 万像素的极端大图可先按比例缩小以保护 Canvas 内存；修改该预算时增加对应策略测试。
+- HEIC/HEIF 的 PNG 解码中间结果不代表源格式；自动模式应优先尝试 AVIF、WebP 或 JPEG，显式选择 PNG 时才输出 PNG。
 - HEIC 和 ZIP 支持保持同源本地依赖，不改为运行时 CDN。
 - 动画 GIF 经 Canvas 重编码会丢失动画；不得把现有支持描述为完整动画输出支持。
 - 修改压缩算法时同步更新可测试逻辑、测试和用户文档，不能只调整测试模型。
