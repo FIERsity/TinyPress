@@ -13,7 +13,18 @@ const state = {
   convertOnly: false,      // true = 仅格式转换，不压体积
   files: [],               // 待压缩文件
   processing: false,
+  runId: 0,                // 清空结果时使仍在运行的异步任务失效
 };
+
+function createAbortError() {
+  const error = new Error('任务已取消');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfCancelled(shouldCancel) {
+  if (shouldCancel && shouldCancel()) throw createAbortError();
+}
 
 const compressionPolicy = window.TinyPressCompressionPolicy;
 if (!compressionPolicy) throw new Error('压缩策略加载失败');
@@ -350,6 +361,7 @@ compressBtn.addEventListener('click', async () => {
   compressBtn.textContent = t(state.convertOnly ? 'converting' : 'compressing');
 
   const files = state.files.slice();
+  const runId = ++state.runId;
   const job = Object.freeze({
     targetBytes: state.targetBytes,
     formatMode: state.format,
@@ -360,24 +372,92 @@ compressBtn.addEventListener('click', async () => {
 
   results.hidden = false;
   for (const file of files) {
+    if (runId !== state.runId) break;
     const card = createCard(file, job);
     try {
-      const r = await compressFile(file, job);
+      const shouldCancel = () => runId !== state.runId;
+      const r = await compressFile(file, job, {
+        shouldCancel,
+        onDecoded: (bitmap) => ensureBeforePreview(card, bitmap, shouldCancel),
+      });
+      if (runId !== state.runId) break;
       renderResult(card, file, r, job);
     } catch (err) {
+      if (runId !== state.runId) break;
       console.error('压缩失败:', file.name, err);
       renderError(card, file, err);
     }
   }
 
-  state.processing = false;
-  updateCompressBtn();
-  compressBtn.textContent = t('compress');
-  updateDownloadAllBtn();
+  if (runId === state.runId) {
+    state.processing = false;
+    updateCompressBtn();
+    compressBtn.textContent = t('compress');
+    updateDownloadAllBtn();
+  }
 });
 
 /* ---------------- 结果卡片 ---------------- */
 const doneResults = []; // {file, result} 用于打包下载
+const beforePreviewReady = new WeakMap();
+
+function setBlobPreview(img, blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      img.onload = null;
+      img.onerror = null;
+      URL.revokeObjectURL(url);
+      resolve(ok);
+    };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    img.src = url;
+  });
+}
+
+function canvasToPreviewBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob && blob.type === type ? blob : null), type, quality);
+  });
+}
+
+async function createCompatiblePreview(bitmap) {
+  const maxDimension = 1600;
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('无法创建预览画布');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, width, height);
+
+  const webp = await canvasToPreviewBlob(canvas, 'image/webp', 0.95);
+  if (webp) return webp;
+  const png = await canvasToPreviewBlob(canvas, 'image/png');
+  if (png) return png;
+  throw new Error('浏览器无法生成兼容预览');
+}
+
+async function ensureBeforePreview(card, bitmap, shouldCancel) {
+  const directPreviewOk = await beforePreviewReady.get(card);
+  if (directPreviewOk || (shouldCancel && shouldCancel())) return;
+  try {
+    const preview = await createCompatiblePreview(bitmap);
+    if (shouldCancel && shouldCancel()) return;
+    const previewOk = await setBlobPreview(card.querySelector('.cmp-before'), preview);
+    if (!previewOk) console.warn('浏览器无法显示解码后的兼容预览');
+  } catch (err) {
+    console.warn('生成压缩前预览失败:', err);
+  }
+}
 
 function createCard(file, job) {
   const card = document.createElement('div');
@@ -402,8 +482,8 @@ function createCard(file, job) {
     '</div>';
   resultGrid.appendChild(card);
 
-  const origUrl = URL.createObjectURL(file);
-  card.querySelector('.cmp-before').src = origUrl;
+  const beforeImg = card.querySelector('.cmp-before');
+  beforePreviewReady.set(card, setBlobPreview(beforeImg, file));
   const range = card.querySelector('.cmp-range');
   const applyPos = () => card.querySelector('.compare').style.setProperty('--pos', range.value + '%');
   applyPos();
@@ -413,7 +493,7 @@ function createCard(file, job) {
 
 function renderResult(card, file, r, job) {
   doneResults.push({ file, result: r });
-  card.querySelector('.cmp-after').src = URL.createObjectURL(r.blob);
+  void setBlobPreview(card.querySelector('.cmp-after'), r.blob);
   const nameEl = card.querySelector('.name');
   const stateEl = card.querySelector('.state');
   const sizeOut = card.querySelector('.size-out');
@@ -612,14 +692,20 @@ async function decodeImage(file) {
 }
 
 /** 精确检测透明像素。分块读取，避免为大图额外分配整幅 RGBA 缓冲区。 */
-function detectAlpha(bitmap) {
+function yieldToBrowser() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function detectAlpha(bitmap, shouldCancel) {
   const TILE_SIZE = 512;
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return true;
 
+  let tilesRead = 0;
   for (let y = 0; y < bitmap.height; y += TILE_SIZE) {
     for (let x = 0; x < bitmap.width; x += TILE_SIZE) {
+      throwIfCancelled(shouldCancel);
       const width = Math.min(TILE_SIZE, bitmap.width - x);
       const height = Math.min(TILE_SIZE, bitmap.height - y);
       canvas.width = width;
@@ -630,15 +716,34 @@ function detectAlpha(bitmap) {
       for (let i = 3; i < data.length; i += 4) {
         if (data[i] < 255) return true;
       }
+      tilesRead++;
+      if (tilesRead % 16 === 0) {
+        await yieldToBrowser();
+        throwIfCancelled(shouldCancel);
+      }
     }
   }
   return false;
 }
 
 /** 压缩单个文件到目标大小以下。格式决策与搜索策略来自可测试的共享策略。 */
-async function compressFile(file, job) {
-  const { targetBytes, formatMode, convertOnly } = job;
+async function compressFile(file, job, hooks = {}) {
+  const { shouldCancel } = hooks;
+  throwIfCancelled(shouldCancel);
   const bitmap = await decodeImage(file);
+  try {
+    throwIfCancelled(shouldCancel);
+    return await compressDecodedImage(file, job, bitmap, hooks);
+  } finally {
+    if (typeof bitmap.close === 'function') bitmap.close();
+  }
+}
+
+async function compressDecodedImage(file, job, bitmap, hooks) {
+  const { targetBytes, formatMode, convertOnly } = job;
+  const { onDecoded, shouldCancel } = hooks;
+  if (onDecoded) await onDecoded(bitmap);
+  throwIfCancelled(shouldCancel);
   const srcMime = (file.type || '').toLowerCase();
 
   // AVIF 编码支持检测
@@ -686,7 +791,7 @@ async function compressFile(file, job) {
   };
   let candidates = [];
   if (formatMode === 'auto') {
-    const hasAlpha = detectAlpha(bitmap);
+    const hasAlpha = await detectAlpha(bitmap, shouldCancel);
     candidates = buildAutoCandidates({
       srcFormat: srcFmt,
       isHeif: srcIsHeic,
@@ -704,6 +809,10 @@ async function compressFile(file, job) {
     const mime = fmtMap[fmt][0];
     const fillWhite = mime === 'image/jpeg';
     return (w, h, quality) => new Promise((resolve, reject) => {
+      if (shouldCancel && shouldCancel()) {
+        reject(createAbortError());
+        return;
+      }
       const canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
@@ -716,6 +825,10 @@ async function compressFile(file, job) {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(bitmap, 0, 0, w, h);
       canvas.toBlob((blob) => {
+        if (shouldCancel && shouldCancel()) {
+          reject(createAbortError());
+          return;
+        }
         if (!blob) {
           reject(new Error('浏览器无法编码该图片格式'));
           return;
@@ -830,9 +943,13 @@ applyLang();
 
 /* ---------------- 清空 ---------------- */
 document.getElementById('clearAll').addEventListener('click', () => {
+  state.runId++;
+  state.processing = false;
+  compressBtn.textContent = t('compress');
   resultGrid.innerHTML = '';
   results.hidden = true;
   doneResults.length = 0;
+  updateCompressBtn();
   updateDownloadAllBtn();
 });
 
