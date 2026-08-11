@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>TinyPress 压缩基准 / Compression Benchmark</title>
+  <link rel="icon" type="image/svg+xml" href="../icons/brandmark.svg" />
+  <link rel="stylesheet" href="styles.css?v=1" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>TinyPress 压缩基准 <span>/ Compression Benchmark</span></h1>
+      <p>本地运行 / Local only</p>
+    </div>
+    <a href="../">返回 TinyPress / Back</a>
+  </header>
+
+  <main>
+    <section class="control-band" aria-labelledby="samplesTitle">
+      <div class="section-heading">
+        <h2 id="samplesTitle">样本 / Samples</h2>
+        <div class="actions">
+          <label class="button primary" for="fileInput">添加本地图片 / Add local images</label>
+          <input id="fileInput" type="file" accept="image/*,.heic,.heif" multiple hidden />
+          <button id="resetSamples" type="button">重置合成样本 / Reset synthetic</button>
+        </div>
+      </div>
+      <div id="sampleList" class="sample-list" aria-live="polite"></div>
+    </section>
+
+    <section class="control-band matrix" aria-labelledby="matrixTitle">
+      <div class="section-heading">
+        <h2 id="matrixTitle">测试矩阵 / Matrix</h2>
+      </div>
+      <fieldset>
+        <legend>目标大小 / Targets</legend>
+        <label><input type="checkbox" name="target" value="51200" checked /> 50KB</label>
+        <label><input type="checkbox" name="target" value="204800" checked /> 200KB</label>
+        <label><input type="checkbox" name="target" value="1048576" checked /> 1MB</label>
+        <label><input type="checkbox" name="target" value="5242880" /> 5MB</label>
+      </fieldset>
+      <fieldset>
+        <legend>输出格式 / Formats</legend>
+        <label><input type="checkbox" name="format" value="auto" checked /> Auto</label>
+        <label><input type="checkbox" name="format" value="jpeg" checked /> JPEG</label>
+        <label><input type="checkbox" name="format" value="webp" checked /> WebP</label>
+        <label id="avifOption"><input id="avifFormat" type="checkbox" name="format" value="avif" /> AVIF</label>
+        <label><input type="checkbox" name="format" value="png" checked /> PNG</label>
+      </fieldset>
+    </section>
+
+    <section class="run-band" aria-label="Benchmark commands">
+      <div class="actions">
+        <label class="trial-control" for="trialCount">重复 / Trials
+          <select id="trialCount">
+            <option value="1">1</option>
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <button id="runBenchmark" class="primary" type="button">运行 / Run</button>
+        <button id="cancelBenchmark" type="button" disabled>取消 / Cancel</button>
+        <button id="exportResults" type="button" disabled>导出 JSON / Export JSON</button>
+      </div>
+      <div class="progress-wrap">
+        <progress id="progress" value="0" max="1"></progress>
+        <p id="status" role="status">正在准备合成样本 / Preparing synthetic samples</p>
+      </div>
+    </section>
+
+    <section class="results" aria-labelledby="resultsTitle">
+      <div class="section-heading">
+        <h2 id="resultsTitle">结果 / Results</h2>
+        <p id="summary">尚未运行 / Not run</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>样本 / Sample</th>
+              <th>目标 / Target</th>
+              <th>请求 / Requested</th>
+              <th>输出 / Output</th>
+              <th>实际 / Actual</th>
+              <th>分辨率 / Dimensions</th>
+              <th>像素保留 / Pixels</th>
+              <th>质量 / Quality</th>
+              <th>PSNR</th>
+              <th>SSIM</th>
+              <th>Alpha RMSE</th>
+              <th>耗时 / Time</th>
+              <th>状态 / Status</th>
+            </tr>
+          </thead>
+          <tbody id="resultRows">
+            <tr class="empty-row"><td colspan="13">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="../compression-policy.js?v=1"></script>
+  <script src="../heic2any.min.js"></script>
+  <script src="metrics.js?v=1"></script>
+  <script src="benchmark.js?v=1"></script>
+</body>
+</html>

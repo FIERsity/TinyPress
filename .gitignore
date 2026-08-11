@@ -11,3 +11,7 @@
 # Cloudflare wrangler 本地缓存
 .wrangler/
 worker/.wrangler/
+
+# 本地基准样本与导出结果
+benchmark/fixtures/
+benchmark/results/

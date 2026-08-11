@@ -39,6 +39,8 @@ TinyPress 没有 `package.json`、构建器或前端框架：
 - `icons/`：品牌与 PWA 图标。
 - `jszip.min.js`、`heic2any.min.js`：同源懒加载的 vendored 依赖，不手工编辑。
 - `test/algo.test.mjs`：直接导入生产压缩策略的确定性单元测试。
+- `benchmark/`：本地浏览器基准工具、确定性合成样本生成器和 PSNR/SSIM 指标实现。
+- `test/benchmark-metrics.test.mjs`：基准指标的确定性 Node 测试。
 - `worker/`：独立部署的 Cloudflare 反馈 Worker。
 
 `.wrangler/` 和 `worker/.wrangler/` 是本地生成状态，不得提交。
@@ -47,9 +49,11 @@ TinyPress 没有 `package.json`、构建器或前端框架：
 
 - 预览：`python3 -m http.server 8080`
 - 算法测试：`node test/algo.test.mjs`
+- 指标测试：`node test/benchmark-metrics.test.mjs`
+- 浏览器基准：启动预览后访问 `http://localhost:8080/benchmark/`
 - 无构建、lint、类型检查或格式化命令。
 
-Canvas、HEIC/AVIF、下载、PWA、service worker 或 UI 改动不能只依赖策略测试，需要通过 HTTP 服务做桌面浏览器检查。
+Canvas、HEIC/AVIF、下载、PWA、service worker 或 UI 改动不能只依赖策略测试，需要通过 HTTP 服务做桌面浏览器检查。基准变更还要运行默认合成矩阵并确认 JSON 导出；版本化 `benchmark/baselines/` 只能包含合成样本，不得纳入本地图片名称、指纹或字节。
 
 ### 发布
 

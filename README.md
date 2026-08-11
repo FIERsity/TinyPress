@@ -26,6 +26,20 @@ PNG 是无损格式，浏览器的 PNG 编码没有可调画质。照片从 HEIF
 
 动画 GIF 经过 Canvas 重编码后只保留静态帧。自动模式直接保留已达标的原 GIF 时，动画不会丢失。
 
+## 压缩基准
+
+仓库包含本地浏览器基准工具。启动 HTTP 预览后访问：
+
+```text
+http://localhost:8080/benchmark/
+```
+
+基准默认生成 JPEG 照片纹理、WebP 精细线条和透明 PNG 三类样本，也可以临时选择本机 JPG、PNG、WebP、AVIF、HEIC 或 HEIF。图片和结果不会发出网络请求；真实样本只存在于当前浏览器页面，仓库不保存图片字节。合成样本不依赖系统字体，导出结果记录生成器版本和源文件 SHA-256；本地图片默认不导出内容指纹。
+
+每个测试用例先预热一次，再按页面选择重复 1、3 或 5 次并记录中位数和 p95。结果包含目标与实际体积、格式、分辨率、像素保留率、编码质量和耗时，并在按源图固定的最长边 512px 尺度上计算黑、白背景中较差的 PSNR 与 8×8 窗口亮度 SSIM，同时记录 Alpha RMSE。这样不同输出分辨率使用相同评估尺度，但该尺度仍使用浏览器 Canvas 缩放器作为固定参考；比较其他缩放器时应同时查看像素保留率和视觉样本。页面导出的 JSON 不包含图片字节。
+
+本地真实样本和临时导出结果不要提交。`benchmark/fixtures/` 与 `benchmark/results/` 已被 Git 忽略。`benchmark/baselines/electron-chrome146-macos.json` 保存了只使用合成样本的首轮 36 项基线；其中的耗时仅适合在相近硬件和浏览器版本下比较。
+
 ## 使用
 
 可直接打开 `index.html`。涉及 Service Worker、PWA 或完整浏览器检查时，建议通过 HTTP 预览：
@@ -61,7 +75,15 @@ tinypress/
 ├── jszip.min.js               # 本地 ZIP 依赖
 ├── manifest.webmanifest       # PWA 元数据
 ├── sw.js                      # 网络优先的离线回退
-├── test/algo.test.mjs         # 确定性压缩策略测试
+├── benchmark/                # 本地 Canvas 压缩基准与质量指标
+│   ├── index.html
+│   ├── benchmark.js
+│   ├── metrics.js
+│   ├── styles.css
+│   └── baselines/            # 仅含合成样本的版本化基线
+├── test/
+│   ├── algo.test.mjs         # 确定性压缩策略测试
+│   └── benchmark-metrics.test.mjs # PSNR/SSIM 指标测试
 └── worker/                    # 独立的反馈 Cloudflare Worker
 ```
 
@@ -69,6 +91,7 @@ tinypress/
 
 ```bash
 node test/algo.test.mjs
+node test/benchmark-metrics.test.mjs
 ```
 
 Canvas、HEIC/AVIF、下载或 PWA 变更还需要通过 HTTP 服务进行桌面浏览器检查。
