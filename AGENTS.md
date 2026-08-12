@@ -41,7 +41,7 @@ TinyPress 没有 `package.json`、构建器或前端框架：
 - `test/algo.test.mjs`：直接导入生产压缩策略的确定性单元测试。
 - `benchmark/`：本地浏览器基准工具、确定性合成样本生成器和 PSNR/SSIM 指标实现。
 - `test/benchmark-metrics.test.mjs`：基准指标的确定性 Node 测试。
-- `worker/`：独立部署的 Cloudflare 反馈 Worker。
+- `worker/`：独立部署的 Cloudflare 反馈 Worker，兼容多个工具的文本反馈并记录产品/语言标签；`worker/feedback.test.mjs` 覆盖请求校验、旧客户端兼容和查看页转义。
 
 `.wrangler/` 和 `worker/.wrangler/` 是本地生成状态，不得提交。
 
@@ -50,6 +50,7 @@ TinyPress 没有 `package.json`、构建器或前端框架：
 - 预览：`python3 -m http.server 8080`
 - 算法测试：`node test/algo.test.mjs`
 - 指标测试：`node test/benchmark-metrics.test.mjs`
+- 反馈 Worker 测试：`node --test worker/feedback.test.mjs`
 - 浏览器基准：启动预览后访问 `http://localhost:8080/benchmark/`
 - 无构建、lint、类型检查或格式化命令。
 
@@ -83,7 +84,7 @@ Canvas、HEIC/AVIF、下载、PWA、service worker 或 UI 改动不能只依赖�
 - service worker 只处理同源 GET；不得缓存或拦截反馈 POST。
 - 保持在线优先、缓存作为离线回退的现有语义，除非用户批准改变离线策略。
 - 改变静态资源时检查资源版本参数和缓存名是否需要协调更新。
-- 反馈 Worker 必须保留输入长度校验、HTML 转义、CORS 限制和滥用控制。
+- 反馈 Worker 必须保留输入长度校验、产品/语言字段白名单、HTML 转义、CORS 限制和滥用控制。
 - `READ_SECRET` 等凭证只能通过 Wrangler secret 配置，不得进入源码、URL 示例、日志或 Git。
 - `worker/` 独立于 Pages 发布；未经明确要求不手动部署 Worker。
 

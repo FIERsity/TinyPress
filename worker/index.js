@@ -83,6 +83,8 @@ export default {
       return json({ error: 'Invalid JSON' }, 400, allowed);
     }
     const text = typeof body.text === 'string' ? body.text.trim() : '';
+    const product = body.product === 'WebReader' ? 'WebReader' : 'TinyPress';
+    const language = body.language === 'zh' || body.language === 'en' ? body.language : null;
     if (!text || text.length > 2000) {
       return json({ error: 'Feedback must be 1-2000 chars' }, 400, allowed);
     }
@@ -93,6 +95,8 @@ export default {
     const key = 'fb:' + ts + '-' + rand;
     const record = {
       text,
+      product,
+      language,
       ip,
       ua: request.headers.get('User-Agent') || '',
       ts,
@@ -115,7 +119,7 @@ async function serveView(env) {
 
   const rows = items.map((it) => `
     <div class="fb">
-      <div class="meta">${new Date(it.ts).toLocaleString()} · ${it.ip || ''} · ${it.ua ? escapeHtml(it.ua.slice(0, 60)) : ''}</div>
+      <div class="meta">${new Date(it.ts).toLocaleString()} · ${escapeHtml(it.product || 'TinyPress')}${it.language ? `/${escapeHtml(it.language)}` : ''} · ${it.ip || ''} · ${it.ua ? escapeHtml(it.ua.slice(0, 60)) : ''}</div>
       <div class="txt">${escapeHtml(it.text)}</div>
     </div>`).join('') || '<p>还没有反馈。</p>';
 
@@ -130,7 +134,7 @@ h1{font-size:20px}
 .meta{font-size:12px;color:#6b7280;margin-bottom:6px}
 .txt{font-size:14px;white-space:pre-wrap;word-break:break-word}
 </style></head><body><div class="wrap">
-<h1>TinyPress 反馈（${items.length}）</h1>
+<h1>工具反馈（${items.length}）</h1>
 ${rows}
 </div></body></html>`, {
     status: 200,
