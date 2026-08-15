@@ -83,7 +83,8 @@ export default {
       return json({ error: 'Invalid JSON' }, 400, allowed);
     }
     const text = typeof body.text === 'string' ? body.text.trim() : '';
-    const product = body.product === 'WebReader' ? 'WebReader' : 'TinyPress';
+    const knownProducts = new Set(['TinyPress', 'WebReader', 'MarkGrove']);
+    const product = knownProducts.has(body.product) ? body.product : 'TinyPress';
     const language = body.language === 'zh' || body.language === 'en' ? body.language : null;
     if (!text || text.length > 2000) {
       return json({ error: 'Feedback must be 1-2000 chars' }, 400, allowed);

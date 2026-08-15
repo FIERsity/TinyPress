@@ -41,6 +41,10 @@ test('stores structured WebReader feedback and remains compatible with old clien
   await worker.fetch(post({ text: 'legacy feedback', product: 'UnknownTool', language: 'fr' }), bindings);
   assert.equal(feedbackRecords(bindings.TINYPRESS_FEEDBACK)[1].product, 'TinyPress');
   assert.equal(feedbackRecords(bindings.TINYPRESS_FEEDBACK)[1].language, null);
+
+  await worker.fetch(post({ text: '笔记建议', product: 'MarkGrove', language: 'en' }), bindings);
+  assert.equal(feedbackRecords(bindings.TINYPRESS_FEEDBACK)[2].product, 'MarkGrove');
+  assert.equal(feedbackRecords(bindings.TINYPRESS_FEEDBACK)[2].language, 'en');
 });
 
 test('rejects untrusted origins and invalid feedback text', async () => {
